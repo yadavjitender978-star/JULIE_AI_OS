@@ -1,0 +1,48 @@
+name: Build JULIE AI OS APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK (arm64-v8a)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up OpenJDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev cmake libffi-dev libssl-dev
+
+      - name: Install Buildozer & Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install buildozer cython==0.29.36 virtualenv setuptools wheel
+
+      - name: Build Android Debug APK with Buildozer
+        run: |
+          yes | buildozer -v android debug
+
+      - name: Upload Generated APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JULIE_AI_OS_v1.2.6_Production_APK
+          path: bin/*.apk
+          if-no-files-found: error
+          retention-days: 14

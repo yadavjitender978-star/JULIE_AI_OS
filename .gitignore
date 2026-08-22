@@ -1,0 +1,14 @@
+.buildozer/
+bin/
+*.apk
+*.aab
+*.log
+build.log
+build_live.log
+data/logs/
+data/*.db
+__pycache__/
+*.pyc
+.env
+*.bak
+voice py2

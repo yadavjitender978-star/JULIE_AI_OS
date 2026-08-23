@@ -20,9 +20,6 @@ from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 
 # Window & Softinput Configuration
-# Keep the entire Kivy window background dark.
-# This prevents the Android window/navigation region from
-# exposing a default white surface.
 Window.clearcolor = get_color_from_hex("#05080F")
 try:
     Window.softinput_mode = "pan"
@@ -323,31 +320,15 @@ class JulieOSApp(App):
 
         # Bottom Input Capsule
         input_box = BoxLayout(
-            size_hint_y=None,
-            height=dp(52),
-            padding=[dp(10), dp(5), dp(6), dp(5)],
-            spacing=dp(6)
+            size_hint_y=None, height=dp(52),
+            padding=[dp(10), dp(6), dp(6), dp(6)], spacing=dp(6)
         )
 
         with input_box.canvas.before:
             Color(rgba=get_color_from_hex("#0D1626"))
-            self.input_bg = RoundedRectangle(
-                pos=input_box.pos,
-                size=input_box.size,
-                radius=[dp(26)]
-            )
-
+            self.input_bg = RoundedRectangle(pos=input_box.pos, size=input_box.size, radius=[dp(26)])
             Color(rgba=get_color_from_hex("#1E293B"))
-            self.input_border = Line(
-                rounded_rectangle=[
-                    input_box.x,
-                    input_box.y,
-                    input_box.width,
-                    input_box.height,
-                    dp(26)
-                ],
-                width=dp(1)
-            )
+            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(26)], width=1)
 
         input_box.bind(pos=self.update_input_bg, size=self.update_input_bg)
 

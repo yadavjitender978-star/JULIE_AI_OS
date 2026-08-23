@@ -1,6 +1,6 @@
 # ==============================================================================
-# JULIE AI OS — PRODUCTION STABLE CORE (v6.7 UI & Navigation Bar Fix)
-# Architecture: Stable JNI Speech Bridge, Polished Floating Capsule UI
+# JULIE AI OS — PRODUCTION STABLE CORE (v6.7 Crash-Free & Clean UI)
+# Architecture: Stable JNI Speech Bridge, Floating Elevated Input Capsule
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
 # ==============================================================================
 
@@ -20,22 +20,14 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 
-# ------------------------------------------------------------------------------
-# 1. WINDOW & SOFTINPUT CONFIGURATION
-# ------------------------------------------------------------------------------
+# Window Setup
 Window.clearcolor = get_color_from_hex("#05080F")
-
 try:
-    Window.softinput_mode = "resize_mode"
+    Window.softinput_mode = "below_target"
 except Exception:
-    try:
-        Window.softinput_mode = "pan"
-    except Exception:
-        pass
+    pass
 
-# ------------------------------------------------------------------------------
-# 2. ANDROID ENVIRONMENT SETUP & SYSTEM BAR STYLING
-# ------------------------------------------------------------------------------
+# Android Environment Setup
 try:
     from android.permissions import (
         Permission,
@@ -53,34 +45,9 @@ except Exception:
         return func
 
 
-def setup_android_system_bars():
-    if not IS_ANDROID:
-        return
-    try:
-        PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        activity = PythonActivity.mActivity
-        if not activity:
-            return
-
-        @run_on_ui_thread
-        def apply_colors():
-            try:
-                window = activity.getWindow()
-                ColorClass = autoclass("android.graphics.Color")
-                dark_color = ColorClass.parseColor("#05080F")
-                window.setStatusBarColor(dark_color)
-                window.setNavigationBarColor(dark_color)
-            except Exception:
-                pass
-
-        apply_colors()
-    except Exception:
-        pass
-
-
-# ------------------------------------------------------------------------------
-# 3. SMART PHONETIC CLEANER
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 1. SMART PHONETIC CLEANER
+# ==============================================================================
 def smart_clean_text(text: str) -> str:
     if not text:
         return ""
@@ -103,9 +70,9 @@ def smart_clean_text(text: str) -> str:
     return text
 
 
-# ------------------------------------------------------------------------------
-# 4. STABLE ANDROID SPEECH LISTENER (JNI)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 2. STABLE ANDROID SPEECH LISTENER (JNI)
+# ==============================================================================
 if IS_ANDROID:
     class JulieSpeechListener(PythonJavaClass):
         __javainterfaces__ = ["android/speech/RecognitionListener"]
@@ -160,9 +127,9 @@ if IS_ANDROID:
             pass
 
 
-# ------------------------------------------------------------------------------
-# 5. CUSTOM CANVAS BUTTONS (CRISP VECTOR ICONS)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 3. CUSTOM CANVAS BUTTONS (CLEAN VECTOR ICONS)
+# ==============================================================================
 class MicButton(Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -170,7 +137,7 @@ class MicButton(Button):
         self.background_down = ""
         self.background_color = (0, 0, 0, 0)
         self.size_hint = (None, None)
-        self.size = (dp(38), dp(38))
+        self.size = (dp(40), dp(40))
 
         with self.canvas.before:
             self.bg_color = Color(rgba=get_color_from_hex("#131D31"))
@@ -178,29 +145,22 @@ class MicButton(Button):
 
         with self.canvas.after:
             self.icon_color = Color(rgba=get_color_from_hex("#38BDF8"))
-            self.mic_body = RoundedRectangle(pos=(0, 0), size=(dp(8), dp(13)), radius=[dp(4)])
-            self.mic_arc = Line(width=dp(1.8), cap="round", joint="round")
-            self.mic_stem = Line(width=dp(1.8), cap="round")
-            self.mic_base = Line(width=dp(1.8), cap="round")
+            self.mic_body = RoundedRectangle(pos=(0, 0), size=(dp(8), dp(14)), radius=[dp(4)])
+            self.mic_arc = Line(width=dp(1.8))
+            self.mic_stem = Line(width=dp(1.8))
+            self.mic_base = Line(width=dp(1.8))
 
         self.bind(pos=self.redraw, size=self.redraw)
         self.redraw()
 
     def redraw(self, *args):
+        x, y = self.x, self.y
         self.circle.pos = self.pos
         self.circle.size = self.size
-        cx = self.x + self.width / 2.0
-        cy = self.y + self.height / 2.0
-
-        self.mic_body.pos = (cx - dp(4), cy - dp(2.5))
-        self.mic_arc.points = [
-            cx - dp(6.5), cy + dp(3.5),
-            cx - dp(6.5), cy - dp(3.5),
-            cx + dp(6.5), cy - dp(3.5),
-            cx + dp(6.5), cy + dp(3.5)
-        ]
-        self.mic_stem.points = [cx, cy - dp(3.5), cx, cy - dp(8)]
-        self.mic_base.points = [cx - dp(4.5), cy - dp(8), cx + dp(4.5), cy - dp(8)]
+        self.mic_body.pos = (x + dp(16), y + dp(14))
+        self.mic_arc.points = [x + dp(12), y + dp(18), x + dp(12), y + dp(11), x + dp(28), y + dp(11), x + dp(28), y + dp(18)]
+        self.mic_stem.points = [x + dp(20), y + dp(11), x + dp(20), y + dp(7)]
+        self.mic_base.points = [x + dp(15), y + dp(7), x + dp(25), y + dp(7)]
 
     def set_active(self, active):
         self.icon_color.rgba = get_color_from_hex("#FFFFFF" if active else "#38BDF8")
@@ -214,7 +174,7 @@ class SendButton(Button):
         self.background_down = ""
         self.background_color = (0, 0, 0, 0)
         self.size_hint = (None, None)
-        self.size = (dp(38), dp(38))
+        self.size = (dp(40), dp(40))
 
         with self.canvas.before:
             self.bg_color = Color(rgba=get_color_from_hex("#2563EB"))
@@ -222,28 +182,27 @@ class SendButton(Button):
 
         with self.canvas.after:
             self.icon_color = Color(rgba=get_color_from_hex("#FFFFFF"))
-            self.arrow = Line(width=dp(2.0), cap="round", joint="round")
+            self.arrow = Line(width=dp(2.0))
 
         self.bind(pos=self.redraw, size=self.redraw)
         self.redraw()
 
     def redraw(self, *args):
+        x, y = self.x, self.y
         self.circle.pos = self.pos
         self.circle.size = self.size
-        cx = self.x + self.width / 2.0
-        cy = self.y + self.height / 2.0
         self.arrow.points = [
-            cx - dp(5.5), cy - dp(6.5),
-            cx + dp(6.5), cy,
-            cx - dp(5.5), cy + dp(6.5),
-            cx - dp(2.0), cy,
-            cx - dp(5.5), cy - dp(6.5)
+            x + dp(13), y + dp(12),
+            x + dp(28), y + dp(20),
+            x + dp(13), y + dp(28),
+            x + dp(17), y + dp(20),
+            x + dp(13), y + dp(12)
         ]
 
 
-# ------------------------------------------------------------------------------
-# 6. MESSAGE BUBBLE (GLASSMORPHISM STYLE)
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 4. MESSAGE BUBBLE (GLASS EFFECT)
+# ==============================================================================
 class MessageBubble(BoxLayout):
     def __init__(self, sender, text, **kwargs):
         super().__init__(**kwargs)
@@ -271,7 +230,7 @@ class MessageBubble(BoxLayout):
             Color(rgba=get_color_from_hex(bg))
             self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(16)])
             Color(rgba=get_color_from_hex("#2C5282" if sender == "USER" else "#1E3A5F"))
-            self.border = Line(rounded_rectangle=[self.x, self.y, self.width, self.height, dp(16)], width=dp(1))
+            self.border = Line(rounded_rectangle=[self.x, self.y, self.width, self.height, dp(16)], width=1)
 
         self.bind(pos=self.update_canvas, size=self.update_canvas)
 
@@ -305,9 +264,9 @@ class MessageBubble(BoxLayout):
         self.height = dp(10) + dp(16) + dp(4) + texture_size + dp(10)
 
 
-# ------------------------------------------------------------------------------
-# 7. MAIN APPLICATION
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# 5. MAIN APPLICATION
+# ==============================================================================
 class JulieOSApp(App):
     def build(self):
         self.title = "JULIE AI OS"
@@ -315,11 +274,11 @@ class JulieOSApp(App):
         self.listener_ref = None
         self.is_listening = False
 
-        # Root Layout: dp(18) bottom padding elevates the capsule above navigation buttons
+        # Root layout with comfortable bottom padding above navigation bar
         root = BoxLayout(
             orientation="vertical",
-            padding=[dp(12), dp(8), dp(12), dp(18)],
-            spacing=dp(8)
+            padding=[dp(10), dp(8), dp(10), dp(18)],
+            spacing=dp(6)
         )
 
         # Header Section
@@ -352,36 +311,26 @@ class JulieOSApp(App):
         root.add_widget(header)
 
         # Chat Scroll View
-        self.scroll = ScrollView(
-            do_scroll_x=False,
-            bar_width=dp(2),
-            bar_color=get_color_from_hex("#1E293B"),
-            scroll_type=["bars", "content"],
-            size_hint=(1, 1)
-        )
+        self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(2), size_hint=(1, 1))
         self.chat = BoxLayout(
-            orientation="vertical",
-            size_hint_y=None,
-            spacing=dp(8),
-            padding=[dp(2), dp(4), dp(2), dp(6)]
+            orientation="vertical", size_hint_y=None,
+            spacing=dp(8), padding=[dp(2), dp(4), dp(2), dp(6)]
         )
         self.chat.bind(minimum_height=self.chat.setter("height"))
         self.scroll.add_widget(self.chat)
         root.add_widget(self.scroll)
 
-        # Floating Input Capsule (ChatGPT / Gemini Style)
+        # Floating Input Capsule (Clean, single container - no blurry lines)
         input_box = BoxLayout(
-            size_hint_y=None,
-            height=dp(50),
-            padding=[dp(12), dp(6), dp(6), dp(6)],
-            spacing=dp(6)
+            size_hint_y=None, height=dp(50),
+            padding=[dp(10), dp(5), dp(5), dp(5)], spacing=dp(6)
         )
 
         with input_box.canvas.before:
             Color(rgba=get_color_from_hex("#0D1626"))
             self.input_bg = RoundedRectangle(pos=input_box.pos, size=input_box.size, radius=[dp(25)])
             Color(rgba=get_color_from_hex("#1E293B"))
-            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(25)], width=dp(1.2))
+            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(25)], width=1)
 
         input_box.bind(pos=self.update_input_bg, size=self.update_input_bg)
 
@@ -389,15 +338,11 @@ class JulieOSApp(App):
         self.cmd_input = TextInput(
             hint_text="Ask or command JULIE...",
             hint_text_color=get_color_from_hex("#64748B"),
-            multiline=False,
-            font_size="14sp",
-            background_normal="",
-            background_active="",
-            background_color=(0, 0, 0, 0),
+            multiline=False, font_size="14sp",
+            background_normal="", background_active="", background_color=(0, 0, 0, 0),
             foreground_color=get_color_from_hex("#F8FAFC"),
             cursor_color=get_color_from_hex("#38BDF8"),
-            cursor_width=dp(2),
-            padding=[dp(4), dp(10), dp(4), dp(10)]
+            padding=[dp(6), dp(10), dp(4), dp(10)]
         )
         self.cmd_input.bind(on_text_validate=self.on_send_button)
         input_box.add_widget(self.cmd_input)
@@ -423,7 +368,6 @@ class JulieOSApp(App):
         self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(25)]
 
     def startup(self, dt):
-        setup_android_system_bars()
         self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.7 Active.")
         self.add_message("JULIE", "Hello! How can I assist you today?")
         if IS_ANDROID:

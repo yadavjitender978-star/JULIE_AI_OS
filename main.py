@@ -23,7 +23,7 @@ from kivy.utils import get_color_from_hex
 # Keep the entire Kivy window background dark.
 # This prevents the Android window/navigation region from
 # exposing a default white surface.
-Window.clearcolor = get_color_from_hex("#05080F")
+Window.clearcolor = (0.05, 0.06, 0.08, 1.0)
 try:
     Window.softinput_mode = "pan"
 except Exception:
@@ -132,6 +132,48 @@ if IS_ANDROID:
 # ==============================================================================
 # 3. CUSTOM CANVAS BUTTONS
 # ==============================================================================
+
+# ================================================================
+# JULIE AI OS — Android Navigation Bar Protection
+# ================================================================
+
+def julie_set_android_navigation_bar():
+    try:
+        from kivy.utils import platform
+
+        if platform != "android":
+            return
+
+        from jnius import autoclass
+
+        PythonActivity = autoclass(
+            "org.kivy.android.PythonActivity"
+        )
+
+        JavaColor = autoclass(
+            "android.graphics.Color"
+        )
+
+        activity = PythonActivity.mActivity
+
+        if activity is None:
+            return
+
+        window = activity.getWindow()
+
+        if window is None:
+            return
+
+        dark_color = JavaColor.parseColor("#0D0F12")
+
+        window.setNavigationBarColor(dark_color)
+
+    except Exception as exc:
+        print(
+            "JULIE Android navigation bar setup warning:",
+            exc
+        )
+
 class MicButton(Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

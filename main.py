@@ -1,6 +1,5 @@
 # ==============================================================================
-# JULIE AI OS — PRODUCTION STABLE CORE (v6.8 Crash-Free & Clean UI)
-# Architecture: Stable JNI Speech Bridge, Floating Elevated Input Capsule
+# JULIE AI OS — PRODUCTION STABLE CORE (v6.8.1 Minimal UI Patch)
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
 # ==============================================================================
 
@@ -20,10 +19,10 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 
-# Window & Keyboard Setup
+# Window & Softinput Configuration
 Window.clearcolor = get_color_from_hex("#05080F")
 try:
-    Window.softinput_mode = "below_target"
+    Window.softinput_mode = "pan"
 except Exception:
     pass
 
@@ -128,7 +127,7 @@ if IS_ANDROID:
 
 
 # ==============================================================================
-# 3. CUSTOM CANVAS BUTTONS (PREMIUM STYLE)
+# 3. CUSTOM CANVAS BUTTONS
 # ==============================================================================
 class MicButton(Button):
     def __init__(self, **kwargs):
@@ -201,7 +200,7 @@ class SendButton(Button):
 
 
 # ==============================================================================
-# 4. MESSAGE BUBBLE (GLASS EFFECT)
+# 4. MESSAGE BUBBLE
 # ==============================================================================
 class MessageBubble(BoxLayout):
     def __init__(self, sender, text, **kwargs):
@@ -274,10 +273,9 @@ class JulieOSApp(App):
         self.listener_ref = None
         self.is_listening = False
 
-        # Root Layout: dp(18) bottom padding elevates input capsule comfortably above Android nav buttons
         root = BoxLayout(
             orientation="vertical",
-            padding=[dp(10), dp(8), dp(10), dp(18)],
+            padding=[dp(10), dp(8), dp(10), dp(14)],
             spacing=dp(6)
         )
 
@@ -292,7 +290,7 @@ class JulieOSApp(App):
         title.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
 
         subtitle = Label(
-            text="PRO QUANTUM SYSTEM v6.8", font_size="8.5sp",
+            text="PRO QUANTUM SYSTEM v6.8.1", font_size="8.5sp",
             color=get_color_from_hex("#64748B"), halign="left", valign="middle"
         )
         subtitle.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
@@ -310,7 +308,7 @@ class JulieOSApp(App):
         header.add_widget(status)
         root.add_widget(header)
 
-        # Chat Scroll View (Flexible expanding area)
+        # Chat Scroll View
         self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), size_hint=(1, 1))
         self.chat = BoxLayout(
             orientation="vertical", size_hint_y=None,
@@ -320,15 +318,7 @@ class JulieOSApp(App):
         self.scroll.add_widget(self.chat)
         root.add_widget(self.scroll)
 
-        # Bottom Floating Stack (Clean single container - no 0-height boxes)
-        self.bottom_stack = BoxLayout(
-            orientation="vertical",
-            size_hint_y=None,
-            height=dp(52),
-            spacing=0
-        )
-
-        # Main Input Capsule
+        # Bottom Input Capsule
         input_box = BoxLayout(
             size_hint_y=None, height=dp(52),
             padding=[dp(10), dp(6), dp(6), dp(6)], spacing=dp(6)
@@ -364,8 +354,7 @@ class JulieOSApp(App):
         send.bind(on_release=self.on_send_button)
         input_box.add_widget(send)
 
-        self.bottom_stack.add_widget(input_box)
-        root.add_widget(self.bottom_stack)
+        root.add_widget(input_box)
 
         Clock.schedule_once(self.startup, 0.2)
         return root
@@ -376,7 +365,7 @@ class JulieOSApp(App):
         self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(26)]
 
     def startup(self, dt):
-        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.8 Active.")
+        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.8.1 Active.")
         self.add_message("JULIE", "Hello! Type multi-line messages and use the send button.")
         if IS_ANDROID:
             try:

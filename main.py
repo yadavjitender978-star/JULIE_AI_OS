@@ -1,5 +1,5 @@
 # ==============================================================================
-# JULIE AI OS — PRODUCTION STABLE CORE (v6.6.2 Pure Stable Base)
+# JULIE AI OS — PRODUCTION STABLE CORE (v6.8 Crash-Free & Clean UI)
 # Architecture: Stable JNI Speech Bridge, Floating Elevated Input Capsule
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
 # ==============================================================================
@@ -274,7 +274,7 @@ class JulieOSApp(App):
         self.listener_ref = None
         self.is_listening = False
 
-        # Root Layout: padding dp(18) at bottom gives clean elevation above Android nav buttons
+        # Root Layout: dp(18) bottom padding elevates input capsule comfortably above Android nav buttons
         root = BoxLayout(
             orientation="vertical",
             padding=[dp(10), dp(8), dp(10), dp(18)],
@@ -292,7 +292,7 @@ class JulieOSApp(App):
         title.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
 
         subtitle = Label(
-            text="PRO QUANTUM SYSTEM v6.6.2", font_size="8.5sp",
+            text="PRO QUANTUM SYSTEM v6.8", font_size="8.5sp",
             color=get_color_from_hex("#64748B"), halign="left", valign="middle"
         )
         subtitle.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
@@ -310,7 +310,7 @@ class JulieOSApp(App):
         header.add_widget(status)
         root.add_widget(header)
 
-        # Chat Scroll View
+        # Chat Scroll View (Flexible expanding area)
         self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), size_hint=(1, 1))
         self.chat = BoxLayout(
             orientation="vertical", size_hint_y=None,
@@ -320,7 +320,7 @@ class JulieOSApp(App):
         self.scroll.add_widget(self.chat)
         root.add_widget(self.scroll)
 
-        # Bottom Floating Stack (Clean single input box - no blurry lines)
+        # Bottom Floating Stack (Clean single container - no 0-height boxes)
         self.bottom_stack = BoxLayout(
             orientation="vertical",
             size_hint_y=None,
@@ -376,7 +376,7 @@ class JulieOSApp(App):
         self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(26)]
 
     def startup(self, dt):
-        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.6.2 Active.")
+        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.8 Active.")
         self.add_message("JULIE", "Hello! Type multi-line messages and use the send button.")
         if IS_ANDROID:
             try:

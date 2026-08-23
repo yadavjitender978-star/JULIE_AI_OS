@@ -1,5 +1,5 @@
 # ==============================================================================
-# JULIE AI OS — PRODUCTION STABLE CORE (v6.7 Crash-Free & Clean UI)
+# JULIE AI OS — PRODUCTION STABLE CORE (v6.6.2 Pure Stable Base)
 # Architecture: Stable JNI Speech Bridge, Floating Elevated Input Capsule
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
 # ==============================================================================
@@ -20,7 +20,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 
-# Window Setup
+# Window & Keyboard Setup
 Window.clearcolor = get_color_from_hex("#05080F")
 try:
     Window.softinput_mode = "below_target"
@@ -71,7 +71,7 @@ def smart_clean_text(text: str) -> str:
 
 
 # ==============================================================================
-# 2. STABLE ANDROID SPEECH LISTENER (JNI)
+# 2. STABLE ANDROID SPEECH LISTENER
 # ==============================================================================
 if IS_ANDROID:
     class JulieSpeechListener(PythonJavaClass):
@@ -128,7 +128,7 @@ if IS_ANDROID:
 
 
 # ==============================================================================
-# 3. CUSTOM CANVAS BUTTONS (CLEAN VECTOR ICONS)
+# 3. CUSTOM CANVAS BUTTONS (PREMIUM STYLE)
 # ==============================================================================
 class MicButton(Button):
     def __init__(self, **kwargs):
@@ -137,7 +137,7 @@ class MicButton(Button):
         self.background_down = ""
         self.background_color = (0, 0, 0, 0)
         self.size_hint = (None, None)
-        self.size = (dp(40), dp(40))
+        self.size = (dp(44), dp(44))
 
         with self.canvas.before:
             self.bg_color = Color(rgba=get_color_from_hex("#131D31"))
@@ -145,7 +145,7 @@ class MicButton(Button):
 
         with self.canvas.after:
             self.icon_color = Color(rgba=get_color_from_hex("#38BDF8"))
-            self.mic_body = RoundedRectangle(pos=(0, 0), size=(dp(8), dp(14)), radius=[dp(4)])
+            self.mic_body = RoundedRectangle(pos=(0, 0), size=(dp(10), dp(16)), radius=[dp(5)])
             self.mic_arc = Line(width=dp(1.8))
             self.mic_stem = Line(width=dp(1.8))
             self.mic_base = Line(width=dp(1.8))
@@ -157,10 +157,10 @@ class MicButton(Button):
         x, y = self.x, self.y
         self.circle.pos = self.pos
         self.circle.size = self.size
-        self.mic_body.pos = (x + dp(16), y + dp(14))
-        self.mic_arc.points = [x + dp(12), y + dp(18), x + dp(12), y + dp(11), x + dp(28), y + dp(11), x + dp(28), y + dp(18)]
-        self.mic_stem.points = [x + dp(20), y + dp(11), x + dp(20), y + dp(7)]
-        self.mic_base.points = [x + dp(15), y + dp(7), x + dp(25), y + dp(7)]
+        self.mic_body.pos = (x + dp(17), y + dp(14))
+        self.mic_arc.points = [x + dp(13), y + dp(18), x + dp(13), y + dp(11), x + dp(31), y + dp(11), x + dp(31), y + dp(18)]
+        self.mic_stem.points = [x + dp(22), y + dp(11), x + dp(22), y + dp(7)]
+        self.mic_base.points = [x + dp(17), y + dp(7), x + dp(27), y + dp(7)]
 
     def set_active(self, active):
         self.icon_color.rgba = get_color_from_hex("#FFFFFF" if active else "#38BDF8")
@@ -174,7 +174,7 @@ class SendButton(Button):
         self.background_down = ""
         self.background_color = (0, 0, 0, 0)
         self.size_hint = (None, None)
-        self.size = (dp(40), dp(40))
+        self.size = (dp(44), dp(44))
 
         with self.canvas.before:
             self.bg_color = Color(rgba=get_color_from_hex("#2563EB"))
@@ -182,7 +182,7 @@ class SendButton(Button):
 
         with self.canvas.after:
             self.icon_color = Color(rgba=get_color_from_hex("#FFFFFF"))
-            self.arrow = Line(width=dp(2.0))
+            self.arrow = Line(width=dp(2.2), joint="round")
 
         self.bind(pos=self.redraw, size=self.redraw)
         self.redraw()
@@ -192,11 +192,11 @@ class SendButton(Button):
         self.circle.pos = self.pos
         self.circle.size = self.size
         self.arrow.points = [
-            x + dp(13), y + dp(12),
-            x + dp(28), y + dp(20),
-            x + dp(13), y + dp(28),
-            x + dp(17), y + dp(20),
-            x + dp(13), y + dp(12)
+            x + dp(14), y + dp(13),
+            x + dp(31), y + dp(22),
+            x + dp(14), y + dp(31),
+            x + dp(18), y + dp(22),
+            x + dp(14), y + dp(13)
         ]
 
 
@@ -208,8 +208,8 @@ class MessageBubble(BoxLayout):
         super().__init__(**kwargs)
         self.orientation = "vertical"
         self.size_hint_y = None
-        self.padding = [dp(14), dp(10), dp(14), dp(10)]
-        self.spacing = dp(4)
+        self.padding = [dp(16), dp(12), dp(16), dp(12)]
+        self.spacing = dp(6)
 
         width = min(Window.width * (0.82 if sender == "USER" else 0.92), dp(360))
         self.width = width
@@ -228,9 +228,9 @@ class MessageBubble(BoxLayout):
 
         with self.canvas.before:
             Color(rgba=get_color_from_hex(bg))
-            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(16)])
+            self.rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(18)])
             Color(rgba=get_color_from_hex("#2C5282" if sender == "USER" else "#1E3A5F"))
-            self.border = Line(rounded_rectangle=[self.x, self.y, self.width, self.height, dp(16)], width=1)
+            self.border = Line(rounded_rectangle=[self.x, self.y, self.width, self.height, dp(18)], width=dp(1))
 
         self.bind(pos=self.update_canvas, size=self.update_canvas)
 
@@ -238,30 +238,30 @@ class MessageBubble(BoxLayout):
             text=f"[b]{title}[/b]  {timestamp}",
             markup=True, color=get_color_from_hex(accent),
             font_size="11sp", halign="left", valign="middle",
-            size_hint_y=None, height=dp(16)
+            size_hint_y=None, height=dp(18)
         )
-        header.text_size = (width - dp(28), None)
+        header.text_size = (width - dp(32), None)
 
         body = Label(
             text=text, color=get_color_from_hex("#F1F5F9"),
-            font_size="14.5sp", halign="left", valign="top",
+            font_size="15sp", halign="left", valign="top",
             size_hint_y=None
         )
-        body.text_size = (width - dp(28), None)
+        body.text_size = (width - dp(32), None)
         body.bind(texture_size=self.update_height)
 
         self.add_widget(header)
         self.add_widget(body)
-        self.height = dp(56)
+        self.height = dp(60)
 
     def update_canvas(self, *args):
         self.rect.pos = self.pos
         self.rect.size = self.size
-        self.border.rounded_rectangle = [self.x, self.y, self.width, self.height, dp(16)]
+        self.border.rounded_rectangle = [self.x, self.y, self.width, self.height, dp(18)]
 
     def update_height(self, instance, texture_size):
         instance.height = texture_size
-        self.height = dp(10) + dp(16) + dp(4) + texture_size + dp(10)
+        self.height = dp(12) + dp(18) + dp(6) + texture_size + dp(12)
 
 
 # ==============================================================================
@@ -274,7 +274,7 @@ class JulieOSApp(App):
         self.listener_ref = None
         self.is_listening = False
 
-        # Root layout with comfortable bottom padding above navigation bar
+        # Root Layout: padding dp(18) at bottom gives clean elevation above Android nav buttons
         root = BoxLayout(
             orientation="vertical",
             padding=[dp(10), dp(8), dp(10), dp(18)],
@@ -282,17 +282,17 @@ class JulieOSApp(App):
         )
 
         # Header Section
-        header = BoxLayout(size_hint_y=None, height=dp(40))
+        header = BoxLayout(size_hint_y=None, height=dp(42))
         title_box = BoxLayout(orientation="vertical")
         
         title = Label(
-            text="[b]JULIE AI OS[/b]", markup=True, font_size="18sp",
+            text="[b]JULIE AI OS[/b]", markup=True, font_size="19sp",
             color=get_color_from_hex("#38BDF8"), halign="left", valign="middle"
         )
         title.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
 
         subtitle = Label(
-            text="PRO QUANTUM SYSTEM v6.7", font_size="8.5sp",
+            text="PRO QUANTUM SYSTEM v6.6.2", font_size="8.5sp",
             color=get_color_from_hex("#64748B"), halign="left", valign="middle"
         )
         subtitle.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
@@ -311,26 +311,34 @@ class JulieOSApp(App):
         root.add_widget(header)
 
         # Chat Scroll View
-        self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(2), size_hint=(1, 1))
+        self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), size_hint=(1, 1))
         self.chat = BoxLayout(
             orientation="vertical", size_hint_y=None,
-            spacing=dp(8), padding=[dp(2), dp(4), dp(2), dp(6)]
+            spacing=dp(8), padding=[dp(2), dp(4), dp(2), dp(8)]
         )
         self.chat.bind(minimum_height=self.chat.setter("height"))
         self.scroll.add_widget(self.chat)
         root.add_widget(self.scroll)
 
-        # Floating Input Capsule (Clean, single container - no blurry lines)
+        # Bottom Floating Stack (Clean single input box - no blurry lines)
+        self.bottom_stack = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height=dp(52),
+            spacing=0
+        )
+
+        # Main Input Capsule
         input_box = BoxLayout(
-            size_hint_y=None, height=dp(50),
-            padding=[dp(10), dp(5), dp(5), dp(5)], spacing=dp(6)
+            size_hint_y=None, height=dp(52),
+            padding=[dp(10), dp(6), dp(6), dp(6)], spacing=dp(6)
         )
 
         with input_box.canvas.before:
             Color(rgba=get_color_from_hex("#0D1626"))
-            self.input_bg = RoundedRectangle(pos=input_box.pos, size=input_box.size, radius=[dp(25)])
+            self.input_bg = RoundedRectangle(pos=input_box.pos, size=input_box.size, radius=[dp(26)])
             Color(rgba=get_color_from_hex("#1E293B"))
-            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(25)], width=1)
+            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(26)], width=1)
 
         input_box.bind(pos=self.update_input_bg, size=self.update_input_bg)
 
@@ -338,13 +346,12 @@ class JulieOSApp(App):
         self.cmd_input = TextInput(
             hint_text="Ask or command JULIE...",
             hint_text_color=get_color_from_hex("#64748B"),
-            multiline=False, font_size="14sp",
+            multiline=True, font_size="14sp",
             background_normal="", background_active="", background_color=(0, 0, 0, 0),
             foreground_color=get_color_from_hex("#F8FAFC"),
             cursor_color=get_color_from_hex("#38BDF8"),
-            padding=[dp(6), dp(10), dp(4), dp(10)]
+            padding=[dp(6), dp(10), dp(4), dp(8)]
         )
-        self.cmd_input.bind(on_text_validate=self.on_send_button)
         input_box.add_widget(self.cmd_input)
 
         # Mic Button
@@ -353,11 +360,12 @@ class JulieOSApp(App):
         input_box.add_widget(self.mic)
 
         # Send Button
-        self.send_btn = SendButton()
-        self.send_btn.bind(on_release=self.on_send_button)
-        input_box.add_widget(self.send_btn)
+        send = SendButton()
+        send.bind(on_release=self.on_send_button)
+        input_box.add_widget(send)
 
-        root.add_widget(input_box)
+        self.bottom_stack.add_widget(input_box)
+        root.add_widget(self.bottom_stack)
 
         Clock.schedule_once(self.startup, 0.2)
         return root
@@ -365,11 +373,11 @@ class JulieOSApp(App):
     def update_input_bg(self, instance, *args):
         self.input_bg.pos = instance.pos
         self.input_bg.size = instance.size
-        self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(25)]
+        self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(26)]
 
     def startup(self, dt):
-        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.7 Active.")
-        self.add_message("JULIE", "Hello! How can I assist you today?")
+        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.6.2 Active.")
+        self.add_message("JULIE", "Hello! Type multi-line messages and use the send button.")
         if IS_ANDROID:
             try:
                 if not check_permission(Permission.RECORD_AUDIO):
@@ -380,7 +388,7 @@ class JulieOSApp(App):
     def add_message(self, sender, text):
         bubble = MessageBubble(sender, text)
         self.chat.add_widget(bubble)
-        Clock.schedule_once(lambda dt: setattr(self.scroll, "scroll_y", 0), 0.05)
+        Clock.schedule_once(lambda dt: setattr(self.scroll, "scroll_y", 0), 0.08)
 
     def on_send_button(self, *args):
         query = self.cmd_input.text.strip()

@@ -43,6 +43,46 @@ except Exception:
         return func
 
 
+# ============================================================
+# ANDROID NAVIGATION BAR — WHITE PATCH FIX
+# ============================================================
+if IS_ANDROID:
+    try:
+        from jnius import autoclass
+
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        Color = autoclass("android.graphics.Color")
+        BuildVersion = autoclass("android.os.Build$VERSION")
+
+        activity = PythonActivity.mActivity
+        window = activity.getWindow()
+
+        # Dark navigation bar
+        window.setNavigationBarColor(
+            Color.parseColor("#05080F")
+        )
+
+        # Android 10+ : disable contrast enforcement
+        if BuildVersion.SDK_INT >= 29:
+            try:
+                window.setNavigationBarContrastEnforced(False)
+            except Exception:
+                pass
+
+        # Android 8+ : remove light navigation bar flag
+        if BuildVersion.SDK_INT >= 26:
+            try:
+                decor = window.getDecorView()
+                flags = decor.getSystemUiVisibility()
+                flags = flags & ~16
+                decor.setSystemUiVisibility(flags)
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+
 def smart_clean_text(text: str) -> str:
     if not text:
         return ""

@@ -1,3 +1,18 @@
+
+# --- JULIE AI OS: Native Android Nav Bar Theme Sync ---
+def _julie_sync_android_navbar():
+    try:
+        from kivy.utils import platform
+        if platform == 'android':
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Color_Java = autoclass('android.graphics.Color')
+            activity = PythonActivity.mActivity
+            if activity:
+                activity.getWindow().setNavigationBarColor(Color_Java.parseColor('#0D0F12'))
+    except Exception:
+        pass
+# -----------------------------------------------------
 # ==============================================================================
 # JULIE AI OS — PRODUCTION STABLE CORE (v6.8.1 Minimal UI Patch)
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
@@ -313,6 +328,7 @@ class MessageBubble(BoxLayout):
 # ==============================================================================
 class JulieOSApp(App):
     def build(self):
+        _julie_sync_android_navbar()
         self.title = "JULIE AI OS"
         self.speech_recognizer = None
         self.listener_ref = None

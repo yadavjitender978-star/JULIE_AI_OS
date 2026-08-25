@@ -77,6 +77,30 @@ except Exception:
         return function
 
 
+# Android 15 / API 35 Navigation Bar Fix
+def configure_android_navigation_bar():
+    if not IS_ANDROID:
+        return
+    try:
+        PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        activity = PythonActivity.mActivity
+        window = activity.getWindow()
+
+        Color = autoclass("android.graphics.Color")
+        window.setNavigationBarColor(Color.TRANSPARENT)
+
+        # Disable Android 15 3-button navigation contrast scrim
+        window.setNavigationBarContrastEnforced(False)
+
+        # Keep divider transparent
+        try:
+            window.setNavigationBarDividerColor(Color.TRANSPARENT)
+        except Exception:
+            pass
+    except Exception as exc:
+        print("Navigation bar configuration:", exc)
+
+
 # ==============================================================================
 # 1. SMART PHONETIC CLEANER
 # ==============================================================================

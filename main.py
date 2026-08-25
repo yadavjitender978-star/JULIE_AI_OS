@@ -1,21 +1,8 @@
-
-# --- JULIE AI OS: Native Android Nav Bar Theme Sync ---
-def _julie_sync_android_navbar():
-    try:
-        from kivy.utils import platform
-        if platform == 'android':
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Color_Java = autoclass('android.graphics.Color')
-            activity = PythonActivity.mActivity
-            if activity:
-                activity.getWindow().setNavigationBarColor(Color_Java.parseColor('#0D0F12'))
-    except Exception:
-        pass
-# -----------------------------------------------------
 # ==============================================================================
-# JULIE AI OS — PRODUCTION STABLE CORE (v6.8.1 Minimal UI Patch)
+# JULIE AI OS — PRODUCTION STABLE CORE (v6.6 Multiline & Keyboard Fix)
+# Architecture: Stable JNI Speech Bridge, Multiline Input, Floating Bottom Panel
 # Target: Android 15 (API 35) / Pydroid 3 / Buildozer APK
+# Fixed: MessageBubble update_height() texture_size Tuple Indexing Fix
 # ==============================================================================
 
 import os
@@ -34,13 +21,10 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.utils import get_color_from_hex
 
-# Window & Softinput Configuration
-# Keep the entire Kivy window background dark.
-# This prevents the Android window/navigation region from
-# exposing a default white surface.
-Window.clearcolor = (0.05, 0.06, 0.08, 1.0)
+# Window & Keyboard Setup - Ensure Android resizes layout cleanly above soft keyboard
+Window.clearcolor = get_color_from_hex("#05080F")
 try:
-    Window.softinput_mode = "pan"
+    Window.softinput_mode = "below_target"
 except Exception:
     pass
 
@@ -145,50 +129,8 @@ if IS_ANDROID:
 
 
 # ==============================================================================
-# 3. CUSTOM CANVAS BUTTONS
+# 3. CUSTOM CANVAS BUTTONS (PREMIUM STYLE)
 # ==============================================================================
-
-# ================================================================
-# JULIE AI OS — Android Navigation Bar Protection
-# ================================================================
-
-def julie_set_android_navigation_bar():
-    try:
-        from kivy.utils import platform
-
-        if platform != "android":
-            return
-
-        from jnius import autoclass
-
-        PythonActivity = autoclass(
-            "org.kivy.android.PythonActivity"
-        )
-
-        JavaColor = autoclass(
-            "android.graphics.Color"
-        )
-
-        activity = PythonActivity.mActivity
-
-        if activity is None:
-            return
-
-        window = activity.getWindow()
-
-        if window is None:
-            return
-
-        dark_color = JavaColor.parseColor("#0D0F12")
-
-        window.setNavigationBarColor(dark_color)
-
-    except Exception as exc:
-        print(
-            "JULIE Android navigation bar setup warning:",
-            exc
-        )
-
 class MicButton(Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -260,7 +202,7 @@ class SendButton(Button):
 
 
 # ==============================================================================
-# 4. MESSAGE BUBBLE
+# 4. MESSAGE BUBBLE (GLASS EFFECT)
 # ==============================================================================
 class MessageBubble(BoxLayout):
     def __init__(self, sender, text, **kwargs):
@@ -318,6 +260,7 @@ class MessageBubble(BoxLayout):
         self.rect.size = self.size
         self.border.rounded_rectangle = [self.x, self.y, self.width, self.height, dp(18)]
 
+    # ✅ 100% FIXED: Explicitly using texture_size (Height)
     def update_height(self, instance, texture_size):
         instance.height = texture_size
         self.height = dp(12) + dp(18) + dp(6) + texture_size + dp(12)
@@ -328,15 +271,15 @@ class MessageBubble(BoxLayout):
 # ==============================================================================
 class JulieOSApp(App):
     def build(self):
-        _julie_sync_android_navbar()
         self.title = "JULIE AI OS"
         self.speech_recognizer = None
         self.listener_ref = None
         self.is_listening = False
 
+        # Safe Area Elevation (dp(48)) above navigation buttons
         root = BoxLayout(
             orientation="vertical",
-            padding=[dp(10), dp(8), dp(10), dp(14)],
+            padding=[dp(10), dp(8), dp(10), dp(48)],
             spacing=dp(6)
         )
 
@@ -351,7 +294,7 @@ class JulieOSApp(App):
         title.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
 
         subtitle = Label(
-            text="PRO QUANTUM SYSTEM v6.8.1", font_size="8.5sp",
+            text="PRO QUANTUM SYSTEM v6.6", font_size="8.5sp",
             color=get_color_from_hex("#64748B"), halign="left", valign="middle"
         )
         subtitle.bind(width=lambda s, v: setattr(s, "text_size", (v, None)))
@@ -369,7 +312,7 @@ class JulieOSApp(App):
         header.add_widget(status)
         root.add_widget(header)
 
-        # Chat Scroll View
+        # Chat Scroll View (Flexible expanding area)
         self.scroll = ScrollView(do_scroll_x=False, bar_width=dp(3), size_hint=(1, 1))
         self.chat = BoxLayout(
             orientation="vertical", size_hint_y=None,
@@ -379,37 +322,47 @@ class JulieOSApp(App):
         self.scroll.add_widget(self.chat)
         root.add_widget(self.scroll)
 
-        # Bottom Input Capsule
-        input_box = BoxLayout(
+        # Bottom Floating Stack (Holds inputs above keyboard)
+        self.bottom_stack = BoxLayout(
+            orientation="vertical",
             size_hint_y=None,
-            height=dp(52),
-            padding=[dp(10), dp(5), dp(6), dp(5)],
-            spacing=dp(6)
+            height=dp(56),
+            spacing=dp(4)
+        )
+
+        # Second Text Box (Dynamic - Appears only when typing)
+        self.second_box_wrapper = BoxLayout(
+            size_hint_y=None, height=0,
+            padding=[dp(4), 0, dp(4), 0]
+        )
+        
+        self.secondary_input = TextInput(
+            hint_text="🏷️ Add Tag / Quick Command Modifier...",
+            hint_text_color=get_color_from_hex("#475569"),
+            multiline=False, font_size="12.5sp",
+            background_normal="", background_active="", background_color=(0.08, 0.12, 0.20, 1),
+            foreground_color=get_color_from_hex("#38BDF8"),
+            cursor_color=get_color_from_hex("#38BDF8"),
+            padding=[dp(10), dp(6), dp(10), dp(6)]
+        )
+        self.second_box_wrapper.add_widget(self.secondary_input)
+        self.bottom_stack.add_widget(self.second_box_wrapper)
+
+        # Main Input Capsule
+        input_box = BoxLayout(
+            size_hint_y=None, height=dp(52),
+            padding=[dp(10), dp(6), dp(6), dp(6)], spacing=dp(6)
         )
 
         with input_box.canvas.before:
             Color(rgba=get_color_from_hex("#0D1626"))
-            self.input_bg = RoundedRectangle(
-                pos=input_box.pos,
-                size=input_box.size,
-                radius=[dp(26)]
-            )
-
+            self.input_bg = RoundedRectangle(pos=input_box.pos, size=input_box.size, radius=[dp(26)])
             Color(rgba=get_color_from_hex("#1E293B"))
-            self.input_border = Line(
-                rounded_rectangle=[
-                    input_box.x,
-                    input_box.y,
-                    input_box.width,
-                    input_box.height,
-                    dp(26)
-                ],
-                width=dp(1)
-            )
+            self.input_border = Line(rounded_rectangle=[input_box.x, input_box.y, input_box.width, input_box.height, dp(26)], width=1)
 
         input_box.bind(pos=self.update_input_bg, size=self.update_input_bg)
 
-        # Main Text Input
+        # Main Text Input - multiline=True ensures Enter creates a new line instead of sending!
         self.cmd_input = TextInput(
             hint_text="Ask or command JULIE...",
             hint_text_color=get_color_from_hex("#64748B"),
@@ -419,6 +372,7 @@ class JulieOSApp(App):
             cursor_color=get_color_from_hex("#38BDF8"),
             padding=[dp(6), dp(10), dp(4), dp(8)]
         )
+        self.cmd_input.bind(text=self.on_main_text_changed)
         input_box.add_widget(self.cmd_input)
 
         # Mic Button
@@ -426,12 +380,13 @@ class JulieOSApp(App):
         self.mic.bind(on_release=self.on_mic)
         input_box.add_widget(self.mic)
 
-        # Send Button
+        # Send Button (Explicit click required to send message)
         send = SendButton()
         send.bind(on_release=self.on_send_button)
         input_box.add_widget(send)
 
-        root.add_widget(input_box)
+        self.bottom_stack.add_widget(input_box)
+        root.add_widget(self.bottom_stack)
 
         Clock.schedule_once(self.startup, 0.2)
         return root
@@ -442,7 +397,7 @@ class JulieOSApp(App):
         self.input_border.rounded_rectangle = [instance.x, instance.y, instance.width, instance.height, dp(26)]
 
     def startup(self, dt):
-        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.8.1 Active.")
+        self.add_message("SYSTEM", "JULIE AI OS Pro Kernel v6.6 Active.")
         self.add_message("JULIE", "Hello! Type multi-line messages and use the send button.")
         if IS_ANDROID:
             try:
@@ -451,6 +406,15 @@ class JulieOSApp(App):
             except Exception:
                 pass
 
+    # Dynamic Second Box Controller
+    def on_main_text_changed(self, instance, value):
+        if len(value.strip()) > 0:
+            self.second_box_wrapper.height = dp(38)
+            self.bottom_stack.height = dp(96)
+        else:
+            self.second_box_wrapper.height = 0
+            self.bottom_stack.height = dp(56)
+
     def add_message(self, sender, text):
         bubble = MessageBubble(sender, text)
         self.chat.add_widget(bubble)
@@ -458,10 +422,16 @@ class JulieOSApp(App):
 
     def on_send_button(self, *args):
         query = self.cmd_input.text.strip()
-        if not query:
+        modifier = self.secondary_input.text.strip()
+        
+        if not query and not modifier:
             return
+            
+        full_query = f"{query} [{modifier}]" if modifier else query
+        
         self.cmd_input.text = ""
-        self.execute(query)
+        self.secondary_input.text = ""
+        self.execute(full_query)
 
     def on_mic(self, *args):
         if self.is_listening:

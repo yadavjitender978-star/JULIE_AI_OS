@@ -551,30 +551,9 @@ class MessageBubble(BoxLayout):
         ]
 
     def update_height(self, instance, texture_size):
-
-        # texture_size is ALWAYS a tuple:
-        # (width, height)
-        #
-        # We only need height.
-
-        body_height = texture_size[1]
-
-        instance.height = body_height
-
-        self.height = (
-            dp(12)
-            + dp(18)
-            + dp(6)
-            + body_height
-            + dp(12)
-        )
-
-
-# ==============================================================================
-# 6. MAIN APPLICATION
-# ==============================================================================
-
-class JulieOSApp(App):
+        height = float(texture_size[1])
+        instance.height = height
+        self.height = dp(48) + height
 
     def build(self):
 

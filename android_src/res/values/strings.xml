@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <resources>
 
-    <string name="app_name">JULIE AI OS</string>
+    <string name="app_name">
+        JULIE AI OS
+    </string>
 
-    <string name="julie_accessibility_description">JULIE AI OS Accessibility Service for screen understanding and user interface interaction.</string>
+    <string name="julie_accessibility_description">
+        JULIE AI OS Accessibility Service for screen understanding and user interface interaction.
+    </string>
 
 </resources>

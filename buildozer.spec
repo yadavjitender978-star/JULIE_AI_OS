@@ -19,3 +19,6 @@ android.permissions = INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS
 [buildozer]
 log_level = 2
 warn_on_root = 0
+android.add_src = android_src
+android.res_xml = android_src/res/xml/julie_accessibility_service.xml
+android.extra_manifest_application_xml = accessibility/accessibility_service_manifest.xml

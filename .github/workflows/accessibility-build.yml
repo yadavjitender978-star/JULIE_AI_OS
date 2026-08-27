@@ -7,31 +7,41 @@ permissions:
   contents: write
 
 jobs:
-
   build-accessibility:
-
     name: Build JULIE AI OS Accessibility APK
-
     runs-on: ubuntu-22.04
 
     steps:
 
+      # ------------------------------------------------------------
+      # 1. CHECKOUT
+      # ------------------------------------------------------------
       - name: Checkout Build 59 Accessibility
         uses: actions/checkout@v4
         with:
           ref: build-59-accessibility
+          fetch-depth: 0
 
+      # ------------------------------------------------------------
+      # 2. PYTHON
+      # ------------------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # ------------------------------------------------------------
+      # 3. JAVA
+      # ------------------------------------------------------------
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+      # ------------------------------------------------------------
+      # 4. ANDROID / BUILD DEPENDENCIES
+      # ------------------------------------------------------------
       - name: Install Android Build Dependencies
         run: |
           sudo apt-get update
@@ -42,475 +52,432 @@ jobs:
             unzip \
             autoconf \
             automake \
+            autopoint \
             libtool \
             pkg-config \
             zlib1g-dev \
             libncurses5-dev \
             cmake \
             libffi-dev \
-            libssl-dev
+            libssl-dev \
+            build-essential
 
+      # ------------------------------------------------------------
+      # 5. BUILD TOOLS
+      # ------------------------------------------------------------
       - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel virtualenv
           python -m pip install buildozer
           python -m pip install "cython==0.29.36"
-          python -m pip install virtualenv setuptools wheel
 
-      - name: Create Accessibility Directories
+          buildozer --version
+          python --version
+          java -version
+
+      # ------------------------------------------------------------
+      # 6. VERIFY ACCESSIBILITY FILES
+      # ------------------------------------------------------------
+      - name: Verify Accessibility Integration
+        shell: bash
         run: |
-          mkdir -p accessibility
-          mkdir -p android_src/org/julie/ai
-          mkdir -p android_src/res/xml
-          mkdir -p android_src/res/values
+          set -e
 
-      - name: Create Python Accessibility Package
-        run: |
+          echo "=================================================="
+          echo "JULIE ACCESSIBILITY FILE CHECK"
+          echo "=================================================="
 
-          cat > accessibility/__init__.py <<'PY'
-          """
-          JULIE AI OS Accessibility package.
-
-          Build 59.
-          """
-          PY
-
-
-          cat > accessibility/accessibility_service.py <<'PY'
-          """
-          JULIE AI OS Accessibility Controller.
-
-          Build 59.
-          """
-
-          from __future__ import annotations
-
-          import logging
-
-
-          LOGGER = logging.getLogger(
-              "julie.accessibility"
+          REQUIRED_FILES=(
+            "accessibility/__init__.py"
+            "accessibility/accessibility_bridge.py"
+            "accessibility/accessibility_service.py"
+            "accessibility/accessibility_service_manifest.xml"
+            "android_src/org/julie/ai/JulieAccessibilityService.java"
+            "android_src/res/xml/julie_accessibility_service.xml"
+            "android_src/res/values/strings.xml"
+            "buildozer.spec"
+            "main.py"
           )
 
+          for FILE in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$FILE" ]; then
+              echo ""
+              echo "ERROR: Required file is missing:"
+              echo "$FILE"
+              exit 1
+            fi
 
-          class AccessibilityController:
+            echo "OK: $FILE"
+          done
 
-              def __init__(self) -> None:
-                  self._enabled = False
-                  self._connected = False
+          echo ""
+          echo "=================================================="
+          echo "ACCESSIBILITY SERVICE JAVA"
+          echo "=================================================="
 
-              def set_enabled(
-                  self,
-                  enabled: bool
-              ) -> None:
+          grep -n "class JulieAccessibilityService" \
+            android_src/org/julie/ai/JulieAccessibilityService.java
 
-                  self._enabled = bool(enabled)
+          echo ""
+          echo "=================================================="
+          echo "ACCESSIBILITY RESOURCE"
+          echo "=================================================="
 
-                  LOGGER.info(
-                      "Accessibility enabled=%s",
-                      self._enabled
-                  )
+          grep -n "julie_accessibility_description" \
+            android_src/res/values/strings.xml
 
-              def set_connected(
-                  self,
-                  connected: bool
-              ) -> None:
+          echo ""
+          echo "=================================================="
+          echo "ACCESSIBILITY XML"
+          echo "=================================================="
 
-                  self._connected = bool(connected)
+          grep -n "accessibility-service" \
+            android_src/res/xml/julie_accessibility_service.xml
 
-                  LOGGER.info(
-                      "Accessibility connected=%s",
-                      self._connected
-                  )
+          echo ""
+          echo "=================================================="
+          echo "MANIFEST SERVICE"
+          echo "=================================================="
 
-              @property
-              def enabled(self) -> bool:
-                  return self._enabled
+          grep -n "JulieAccessibilityService" \
+            accessibility/accessibility_service_manifest.xml
 
-              @property
-              def connected(self) -> bool:
-                  return self._connected
+          grep -n "BIND_ACCESSIBILITY_SERVICE" \
+            accessibility/accessibility_service_manifest.xml
 
-              def status(self) -> dict[str, bool]:
-                  return {
-                      "enabled": self._enabled,
-                      "connected": self._connected,
-                  }
+          grep -n "android.accessibilityservice.AccessibilityService" \
+            accessibility/accessibility_service_manifest.xml
 
-
-          _controller = None
-
-
-          def get_controller() -> AccessibilityController:
-
-              global _controller
-
-              if _controller is None:
-                  _controller = AccessibilityController()
-
-              return _controller
-          PY
-
-
-          cat > accessibility/accessibility_bridge.py <<'PY'
-          """
-          JULIE AI OS Accessibility JNI Bridge.
-
-          Build 59.
-          """
-
-          from __future__ import annotations
-
-          import logging
-          from typing import Any, Optional
-
-
-          LOGGER = logging.getLogger(
-              "julie.accessibility.bridge"
-          )
-
-
-          class AccessibilityBridge:
-
-              def __init__(self) -> None:
-                  self._service: Optional[Any] = None
-
-              def initialize(self) -> bool:
-
-                  try:
-
-                      from jnius import autoclass
-
-                      service_class = autoclass(
-                          "org.julie.ai.JulieAccessibilityService"
-                      )
-
-                      service = service_class.getInstance()
-
-                      if service is None:
-                          self._service = None
-                          return False
-
-                      self._service = service
-                      return True
-
-                  except Exception as exc:
-
-                      LOGGER.debug(
-                          "Accessibility service unavailable: %s",
-                          exc
-                      )
-
-                      self._service = None
-                      return False
-
-              def is_available(self) -> bool:
-                  return self._service is not None
-
-              def is_service_running(self) -> bool:
-
-                  if self._service is None:
-                      return False
-
-                  try:
-                      return bool(
-                          self._service.isServiceRunning()
-                      )
-                  except Exception:
-                      return False
-
-              def get_service(self) -> Optional[Any]:
-                  return self._service
-          PY
-
-      - name: Create Native Accessibility Service
+      # ------------------------------------------------------------
+      # 7. VALIDATE XML
+      # ------------------------------------------------------------
+      - name: Validate Accessibility XML
+        shell: bash
         run: |
-
-          cat > android_src/org/julie/ai/JulieAccessibilityService.java <<'JAVA'
-          package org.julie.ai;
-
-          import android.accessibilityservice.AccessibilityService;
-          import android.view.accessibility.AccessibilityEvent;
-          import android.view.accessibility.AccessibilityNodeInfo;
-          import android.util.Log;
-
-
-          public class JulieAccessibilityService
-                  extends AccessibilityService {
-
-              private static final String TAG =
-                      "JULIE_ACCESSIBILITY";
-
-              private static JulieAccessibilityService instance;
-
-
-              public static synchronized
-              JulieAccessibilityService getInstance() {
-
-                  return instance;
-              }
-
-
-              @Override
-              protected void onServiceConnected() {
-
-                  super.onServiceConnected();
-
-                  instance = this;
-
-                  Log.i(
-                      TAG,
-                      "JULIE Accessibility Service CONNECTED"
-                  );
-              }
-
-
-              @Override
-              public void onAccessibilityEvent(
-                      AccessibilityEvent event) {
-
-                  if (event == null) {
-                      return;
-                  }
-
-                  int eventType =
-                          event.getEventType();
-
-                  CharSequence packageName =
-                          event.getPackageName();
-
-                  CharSequence className =
-                          event.getClassName();
-
-                  Log.d(
-                      TAG,
-                      "eventType=" + eventType
-                      + " package=" + packageName
-                      + " class=" + className
-                  );
-              }
-
-
-              @Override
-              public void onInterrupt() {
-
-                  Log.w(
-                      TAG,
-                      "JULIE Accessibility Service INTERRUPTED"
-                  );
-              }
-
-
-              @Override
-              public void onDestroy() {
-
-                  Log.i(
-                      TAG,
-                      "JULIE Accessibility Service DESTROYED"
-                  );
-
-                  if (instance == this) {
-                      instance = null;
-                  }
-
-                  super.onDestroy();
-              }
-
-
-              public boolean isServiceRunning() {
-
-                  return instance != null;
-              }
-
-
-              public AccessibilityNodeInfo
-              getActiveWindowRoot() {
-
-                  try {
-                      return getRootInActiveWindow();
-
-                  } catch (Exception e) {
-
-                      Log.e(
-                          TAG,
-                          "Unable to get active window root",
-                          e
-                      );
-
-                      return null;
-                  }
-              }
-          }
-          JAVA
-
-      - name: Create Accessibility XML
-        run: |
-
-          cat > android_src/res/xml/julie_accessibility_service.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <accessibility-service
-              xmlns:android="http://schemas.android.com/apk/res/android"
-
-              android:accessibilityEventTypes="
-                  typeViewClicked|
-                  typeViewFocused|
-                  typeViewTextChanged|
-                  typeWindowStateChanged|
-                  typeWindowContentChanged|
-                  typeViewScrolled
-              "
-
-              android:accessibilityFeedbackType="feedbackGeneric"
-
-              android:notificationTimeout="100"
-
-              android:canRetrieveWindowContent="true"
-
-              android:canPerformGestures="true"
-
-              android:description="@string/julie_accessibility_description"
-
-          />
-          XML
-
-      - name: Create Android Strings
-        run: |
-
-          cat > android_src/res/values/strings.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-
-          <resources>
-
-              <string name="app_name">
-                  JULIE AI OS
-              </string>
-
-              <string name="julie_accessibility_description">
-                  JULIE AI OS Accessibility Service for screen understanding and user interface interaction.
-              </string>
-
-          </resources>
-          XML
-
-      - name: Create Accessibility Manifest Declaration
-        run: |
-
-          cat > accessibility/accessibility_service_manifest.xml <<'XML'
-          <service
-              android:name="org.julie.ai.JulieAccessibilityService"
-              android:label="JULIE AI OS"
-              android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-              android:exported="true">
-
-              <intent-filter>
-
-                  <action
-                      android:name="android.accessibilityservice.AccessibilityService" />
-
-              </intent-filter>
-
-              <meta-data
-                  android:name="android.accessibilityservice"
-                  android:resource="@xml/julie_accessibility_service" />
-
-          </service>
-          XML
-
-      - name: Update Buildozer Configuration
-        run: |
+          set -e
 
           python - <<'PY'
-
+          import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          path = Path("buildozer.spec")
-
-          text = path.read_text(
-              encoding="utf-8"
-          )
-
-          additions = [
-              "android.add_src = android_src",
-              "android.res_xml = android_src/res/xml/julie_accessibility_service.xml",
-              "android.extra_manifest_application_xml = accessibility/accessibility_service_manifest.xml",
+          files = [
+              Path("android_src/res/xml/julie_accessibility_service.xml"),
+              Path("android_src/res/values/strings.xml"),
+              Path("accessibility/accessibility_service_manifest.xml"),
           ]
 
-          for line in additions:
+          for path in files:
+              print(f"Checking XML: {path}")
+              ET.parse(path)
+              print(f"OK: {path}")
 
-              key = line.split("=", 1)[0].strip()
-
-              exists = any(
-                  item.strip().startswith(key + " =")
-                  for item in text.splitlines()
-              )
-
-              if not exists:
-                  text = text.rstrip() + "\n" + line + "\n"
-
-          path.write_text(
-              text,
-              encoding="utf-8"
-          )
-
-          print(path.read_text())
-
+          print("All Accessibility XML files are valid.")
           PY
 
-      - name: Verify Existing JULIE Core Was Not Changed
+      # ------------------------------------------------------------
+      # 8. VALIDATE JAVA
+      # ------------------------------------------------------------
+      - name: Validate Java Source
+        shell: bash
         run: |
+          set -e
 
-          echo "Checking main.py..."
-          git status --short -- main.py
+          JAVA_FILE="android_src/org/julie/ai/JulieAccessibilityService.java"
 
-          echo "Checking voice..."
-          git status --short -- voice
+          echo "Checking Java source..."
 
-          echo "Checking accessibility..."
-          find accessibility -type f -print
+          grep -q \
+            "package org.julie.ai;" \
+            "$JAVA_FILE"
 
-          echo "Checking native Android source..."
-          find android_src -type f -print
+          grep -q \
+            "extends AccessibilityService" \
+            "$JAVA_FILE"
 
-      - name: Commit Accessibility Integration
+          grep -q \
+            "onAccessibilityEvent" \
+            "$JAVA_FILE"
+
+          grep -q \
+            "onInterrupt" \
+            "$JAVA_FILE"
+
+          echo "Java Accessibility Service source validation passed."
+
+      # ------------------------------------------------------------
+      # 9. VALIDATE BUILD CONFIGURATION
+      # ------------------------------------------------------------
+      - name: Validate Buildozer Configuration
+        shell: bash
         run: |
+          set -e
 
+          echo "=================================================="
+          echo "BUILD CONFIGURATION"
+          echo "=================================================="
+
+          grep -n "^requirements" buildozer.spec || true
+          grep -n "^android.permissions" buildozer.spec || true
+          grep -n "^android.add_src" buildozer.spec || true
+          grep -n "^android.res_xml" buildozer.spec || true
+          grep -n "^android.add_resources" buildozer.spec || true
+          grep -n "^android.extra_manifest_application_xml" buildozer.spec || true
+
+          echo ""
+          echo "Checking required Accessibility configuration..."
+
+          grep -q \
+            "BIND_ACCESSIBILITY_SERVICE" \
+            buildozer.spec
+
+          grep -q \
+            "android_src" \
+            buildozer.spec
+
+          grep -q \
+            "android.extra_manifest_application_xml" \
+            buildozer.spec
+
+          echo "Buildozer Accessibility configuration detected."
+
+      # ------------------------------------------------------------
+      # 10. NORMALIZE BUILD CONFIGURATION
+      # ------------------------------------------------------------
+      - name: Configure Accessibility Resources
+        shell: bash
+        run: |
+          set -e
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("buildozer.spec")
+          text = path.read_text(encoding="utf-8")
+
+          def set_option(text, key, value):
+              pattern = rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=.*$"
+              replacement = f"{key} = {value}"
+
+              if re.search(pattern, text):
+                  return re.sub(pattern, replacement, text)
+
+              app_match = re.search(r"(?m)^\[app\][ \t]*$", text)
+
+              if not app_match:
+                  raise RuntimeError("[app] section not found")
+
+              insert_at = app_match.end()
+
+              return (
+                  text[:insert_at]
+                  + "\n"
+                  + replacement
+                  + text[insert_at:]
+              )
+
+          # Keep the Android module explicitly available.
+          text = set_option(
+              text,
+              "requirements",
+              "python3,kivy,pyjnius,android"
+          )
+
+          # Accessibility permission.
+          text = set_option(
+              text,
+              "android.permissions",
+              "INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,BIND_ACCESSIBILITY_SERVICE"
+          )
+
+          # Java source directory.
+          text = set_option(
+              text,
+              "android.add_src",
+              "android_src"
+          )
+
+          # Accessibility XML copied to res/xml.
+          text = set_option(
+              text,
+              "android.res_xml",
+              "android_src/res/xml/julie_accessibility_service.xml"
+          )
+
+          # IMPORTANT:
+          # Add the complete Android resource tree.
+          # This includes:
+          #   res/values/strings.xml
+          #   res/xml/julie_accessibility_service.xml
+          text = set_option(
+              text,
+              "android.add_resources",
+              "android_src/res"
+          )
+
+          # Service declaration inside <application>.
+          text = set_option(
+              text,
+              "android.extra_manifest_application_xml",
+              "accessibility/accessibility_service_manifest.xml"
+          )
+
+          path.write_text(text, encoding="utf-8")
+
+          print("Updated buildozer.spec:")
+          print("----------------------------------------")
+          print(text)
+          print("----------------------------------------")
+          PY
+
+      # ------------------------------------------------------------
+      # 11. SHOW FINAL FILE TREE
+      # ------------------------------------------------------------
+      - name: Show Accessibility File Tree
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "ACCESSIBILITY TREE"
+          echo "=================================================="
+
+          find accessibility android_src \
+            -type f \
+            -print \
+            | sort
+
+      # ------------------------------------------------------------
+      # 12. SHOW FINAL BUILD CONFIGURATION
+      # ------------------------------------------------------------
+      - name: Show Final Build Configuration
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "FINAL BUILDOZER SPEC"
+          echo "=================================================="
+
+          cat buildozer.spec
+
+      # ------------------------------------------------------------
+      # 13. CHECK GIT CHANGES
+      # ------------------------------------------------------------
+      - name: Check Git Changes
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "GIT STATUS"
+          echo "=================================================="
+
+          git status --short
+
+      # ------------------------------------------------------------
+      # 14. COMMIT ONLY BUILD CONFIGURATION CHANGES
+      # ------------------------------------------------------------
+      - name: Commit Build Configuration
+        shell: bash
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            accessibility \
-            android_src \
-            buildozer.spec
+          git add buildozer.spec
 
-          git diff --cached --quiet || \
-            git commit -m "Build 59: add Android Accessibility Service"
+          if git diff --cached --quiet; then
+            echo "No build configuration changes to commit."
+          else
+            git commit -m "Build 59: configure Accessibility resources"
+          fi
 
-      - name: Push Accessibility Integration
+      # ------------------------------------------------------------
+      # 15. PUSH CONFIGURATION
+      # ------------------------------------------------------------
+      - name: Push Build Configuration
+        shell: bash
         run: |
-
           git push origin HEAD:build-59-accessibility
 
+      # ------------------------------------------------------------
+      # 16. CLEAN OLD BUILD OUTPUT
+      # ------------------------------------------------------------
+      - name: Clean Previous Build
+        shell: bash
+        run: |
+          rm -rf .buildozer bin
+
+          echo "Previous Buildozer output removed."
+
+      # ------------------------------------------------------------
+      # 17. BUILD APK
+      # ------------------------------------------------------------
       - name: Build APK
+        shell: bash
         run: |
+          set -o pipefail
 
-          yes | buildozer -v android debug
+          yes | buildozer -v android debug 2>&1 | tee build.log
 
+      # ------------------------------------------------------------
+      # 18. EXTRACT IMPORTANT ERRORS
+      # ------------------------------------------------------------
+      - name: Extract Build Errors
+        if: failure()
+        shell: bash
+        run: |
+          echo ""
+          echo "=================================================="
+          echo "IMPORTANT BUILD ERRORS"
+          echo "=================================================="
+
+          if [ -f build.log ]; then
+
+            grep -n -E \
+              "FAILURE:|ERROR:|AAPT:|Manifest merger failed|Execution failed|Caused by:|Could not find|No matching distribution|resource .* not found|error:" \
+              build.log \
+              | tail -n 100 \
+              || true
+
+          else
+            echo "build.log was not created."
+          fi
+
+      # ------------------------------------------------------------
+      # 19. VERIFY GENERATED APK
+      # ------------------------------------------------------------
       - name: List APK
+        if: success()
+        shell: bash
         run: |
-
-          echo "Generated APK files:"
+          echo "=================================================="
+          echo "GENERATED APK FILES"
+          echo "=================================================="
 
           find bin \
             -maxdepth 1 \
             -type f \
             -name "*.apk" \
-            -print
+            -print \
+            -exec ls -lh {} \;
 
+      # ------------------------------------------------------------
+      # 20. UPLOAD APK
+      # ------------------------------------------------------------
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: JULIE_AI_OS_Build59_Accessibility
           path: bin/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+      # ------------------------------------------------------------
+      # 21. UPLOAD BUILD LOG ON FAILURE
+      # ------------------------------------------------------------
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JULIE_AI_OS_Build59_BuildLog
+          path: |
+            build.log
+            buildozer.spec
+          if-no-files-found: ignore
           retention-days: 14

@@ -9,7 +9,7 @@ source.exclude_dirs = .buildozer,bin,__pycache__,.git,apk
 
 version = 6.6.1
 
-requirements = python3,kivy,pyjnius,android
+requirements = python3,kivy
 
 orientation = portrait
 fullscreen = 0
@@ -20,7 +20,7 @@ android.ndk_api = 21
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 
-android.permissions = INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS
+android.permissions = INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, BIND_ACCESSIBILITY_SERVICE
 
 android.add_src = android_src
 android.res_xml = android_src/res/xml/julie_accessibility_service.xml

@@ -43,7 +43,10 @@ jobs:
       # 4. ANDROID / BUILD DEPENDENCIES
       # ------------------------------------------------------------
       - name: Install Android Build Dependencies
+        shell: bash
         run: |
+          set -e
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -66,13 +69,27 @@ jobs:
       # 5. BUILD TOOLS
       # ------------------------------------------------------------
       - name: Install Buildozer
+        shell: bash
         run: |
-          python -m pip install --upgrade pip setuptools wheel virtualenv
+          set -e
+
+          python -m pip install --upgrade \
+            pip \
+            setuptools \
+            wheel \
+            virtualenv
+
           python -m pip install buildozer
+
           python -m pip install "cython==0.29.36"
 
+          echo "Buildozer:"
           buildozer --version
+
+          echo "Python:"
           python --version
+
+          echo "Java:"
           java -version
 
       # ------------------------------------------------------------
@@ -100,6 +117,7 @@ jobs:
           )
 
           for FILE in "${REQUIRED_FILES[@]}"; do
+
             if [ ! -f "$FILE" ]; then
               echo ""
               echo "ERROR: Required file is missing:"
@@ -108,6 +126,7 @@ jobs:
             fi
 
             echo "OK: $FILE"
+
           done
 
           echo ""
@@ -115,15 +134,17 @@ jobs:
           echo "ACCESSIBILITY SERVICE JAVA"
           echo "=================================================="
 
-          grep -n "class JulieAccessibilityService" \
+          grep -n \
+            "class JulieAccessibilityService" \
             android_src/org/julie/ai/JulieAccessibilityService.java
 
           echo ""
           echo "=================================================="
-          echo "ACCESSIBILITY RESOURCE"
+          echo "ACCESSIBILITY RESOURCE STRING"
           echo "=================================================="
 
-          grep -n "julie_accessibility_description" \
+          grep -n \
+            "julie_accessibility_description" \
             android_src/res/values/strings.xml
 
           echo ""
@@ -131,27 +152,39 @@ jobs:
           echo "ACCESSIBILITY XML"
           echo "=================================================="
 
-          grep -n "accessibility-service" \
+          grep -n \
+            "accessibility-service" \
             android_src/res/xml/julie_accessibility_service.xml
 
           echo ""
           echo "=================================================="
-          echo "MANIFEST SERVICE"
+          echo "ACCESSIBILITY MANIFEST SERVICE"
           echo "=================================================="
 
-          grep -n "JulieAccessibilityService" \
+          grep -n \
+            "JulieAccessibilityService" \
             accessibility/accessibility_service_manifest.xml
 
-          grep -n "BIND_ACCESSIBILITY_SERVICE" \
+          grep -n \
+            "BIND_ACCESSIBILITY_SERVICE" \
             accessibility/accessibility_service_manifest.xml
 
-          grep -n "android.accessibilityservice.AccessibilityService" \
+          grep -n \
+            "android.accessibilityservice.AccessibilityService" \
             accessibility/accessibility_service_manifest.xml
+
+          echo ""
+          echo "Accessibility integration files are present."
 
       # ------------------------------------------------------------
-      # 7. VALIDATE XML
+      # 7. VALIDATE ACCESSIBILITY RESOURCE XML
       # ------------------------------------------------------------
-      - name: Validate Accessibility XML
+      # IMPORTANT:
+      # Do NOT parse accessibility_service_manifest.xml as a
+      # standalone XML document. It is an application-manifest
+      # fragment and is injected into AndroidManifest.xml.
+      # ------------------------------------------------------------
+      - name: Validate Accessibility Resource XML
         shell: bash
         run: |
           set -e
@@ -160,22 +193,77 @@ jobs:
           import xml.etree.ElementTree as ET
           from pathlib import Path
 
-          files = [
+          resource_files = [
               Path("android_src/res/xml/julie_accessibility_service.xml"),
               Path("android_src/res/values/strings.xml"),
-              Path("accessibility/accessibility_service_manifest.xml"),
           ]
 
-          for path in files:
-              print(f"Checking XML: {path}")
+          for path in resource_files:
+              print(f"Checking Android resource XML: {path}")
+
               ET.parse(path)
+
               print(f"OK: {path}")
 
-          print("All Accessibility XML files are valid.")
+          print("")
+          print("Accessibility resource XML validation passed.")
           PY
 
       # ------------------------------------------------------------
-      # 8. VALIDATE JAVA
+      # 8. VALIDATE MANIFEST FRAGMENT
+      # ------------------------------------------------------------
+      # The manifest fragment contains android:* attributes.
+      # Because it is intentionally a fragment, we validate it by
+      # wrapping it inside a temporary <application> element that
+      # declares the Android namespace.
+      # ------------------------------------------------------------
+      - name: Validate Accessibility Manifest Fragment
+        shell: bash
+        run: |
+          set -e
+
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          manifest_fragment = Path(
+              "accessibility/accessibility_service_manifest.xml"
+          )
+
+          fragment = manifest_fragment.read_text(
+              encoding="utf-8"
+          ).strip()
+
+          if not fragment:
+              raise RuntimeError(
+                  "Accessibility manifest fragment is empty."
+              )
+
+          if "<service" not in fragment:
+              raise RuntimeError(
+                  "Accessibility manifest fragment does not contain <service>."
+              )
+
+          wrapper = f"""
+          <application
+              xmlns:android="http://schemas.android.com/apk/res/android">
+              {fragment}
+          </application>
+          """
+
+          ET.fromstring(wrapper)
+
+          print(
+              "OK: accessibility/accessibility_service_manifest.xml"
+          )
+
+          print(
+              "Accessibility manifest fragment validation passed."
+          )
+          PY
+
+      # ------------------------------------------------------------
+      # 9. VALIDATE JAVA
       # ------------------------------------------------------------
       - name: Validate Java Source
         shell: bash
@@ -195,6 +283,10 @@ jobs:
             "$JAVA_FILE"
 
           grep -q \
+            "onServiceConnected" \
+            "$JAVA_FILE"
+
+          grep -q \
             "onAccessibilityEvent" \
             "$JAVA_FILE"
 
@@ -202,10 +294,14 @@ jobs:
             "onInterrupt" \
             "$JAVA_FILE"
 
+          grep -q \
+            "onDestroy" \
+            "$JAVA_FILE"
+
           echo "Java Accessibility Service source validation passed."
 
       # ------------------------------------------------------------
-      # 9. VALIDATE BUILD CONFIGURATION
+      # 10. VALIDATE BUILD CONFIGURATION
       # ------------------------------------------------------------
       - name: Validate Buildozer Configuration
         shell: bash
@@ -217,6 +313,10 @@ jobs:
           echo "=================================================="
 
           grep -n "^requirements" buildozer.spec || true
+          grep -n "^android.api" buildozer.spec || true
+          grep -n "^android.minapi" buildozer.spec || true
+          grep -n "^android.ndk_api" buildozer.spec || true
+          grep -n "^android.archs" buildozer.spec || true
           grep -n "^android.permissions" buildozer.spec || true
           grep -n "^android.add_src" buildozer.spec || true
           grep -n "^android.res_xml" buildozer.spec || true
@@ -238,10 +338,11 @@ jobs:
             "android.extra_manifest_application_xml" \
             buildozer.spec
 
+          echo ""
           echo "Buildozer Accessibility configuration detected."
 
       # ------------------------------------------------------------
-      # 10. NORMALIZE BUILD CONFIGURATION
+      # 11. CONFIGURE ACCESSIBILITY RESOURCES
       # ------------------------------------------------------------
       - name: Configure Accessibility Resources
         shell: bash
@@ -253,19 +354,36 @@ jobs:
           import re
 
           path = Path("buildozer.spec")
-          text = path.read_text(encoding="utf-8")
+
+          text = path.read_text(
+              encoding="utf-8"
+          )
 
           def set_option(text, key, value):
-              pattern = rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=.*$"
+
+              pattern = (
+                  rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=.*$"
+              )
+
               replacement = f"{key} = {value}"
 
               if re.search(pattern, text):
-                  return re.sub(pattern, replacement, text)
 
-              app_match = re.search(r"(?m)^\[app\][ \t]*$", text)
+                  return re.sub(
+                      pattern,
+                      replacement,
+                      text
+                  )
+
+              app_match = re.search(
+                  r"(?m)^\[app\][ \t]*$",
+                  text
+              )
 
               if not app_match:
-                  raise RuntimeError("[app] section not found")
+                  raise RuntimeError(
+                      "[app] section not found in buildozer.spec"
+                  )
 
               insert_at = app_match.end()
 
@@ -276,66 +394,84 @@ jobs:
                   + text[insert_at:]
               )
 
-          # Keep the Android module explicitly available.
+          # --------------------------------------------------------
+          # Python / Kivy / Android modules
+          # --------------------------------------------------------
           text = set_option(
               text,
               "requirements",
               "python3,kivy,pyjnius,android"
           )
 
-          # Accessibility permission.
+          # --------------------------------------------------------
+          # Accessibility permission
+          # --------------------------------------------------------
           text = set_option(
               text,
               "android.permissions",
               "INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,BIND_ACCESSIBILITY_SERVICE"
           )
 
-          # Java source directory.
+          # --------------------------------------------------------
+          # Java source
+          # --------------------------------------------------------
           text = set_option(
               text,
               "android.add_src",
               "android_src"
           )
 
-          # Accessibility XML copied to res/xml.
+          # --------------------------------------------------------
+          # Accessibility service configuration XML
+          # --------------------------------------------------------
           text = set_option(
               text,
               "android.res_xml",
               "android_src/res/xml/julie_accessibility_service.xml"
           )
 
+          # --------------------------------------------------------
           # IMPORTANT:
           # Add the complete Android resource tree.
-          # This includes:
-          #   res/values/strings.xml
-          #   res/xml/julie_accessibility_service.xml
+          #
+          # This makes sure strings.xml is available to Android
+          # resource linking as well as the accessibility XML.
+          # --------------------------------------------------------
           text = set_option(
               text,
               "android.add_resources",
               "android_src/res"
           )
 
-          # Service declaration inside <application>.
+          # --------------------------------------------------------
+          # Accessibility <service> declaration
+          # --------------------------------------------------------
           text = set_option(
               text,
               "android.extra_manifest_application_xml",
               "accessibility/accessibility_service_manifest.xml"
           )
 
-          path.write_text(text, encoding="utf-8")
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
 
+          print("")
           print("Updated buildozer.spec:")
-          print("----------------------------------------")
+          print("==================================================")
           print(text)
-          print("----------------------------------------")
+          print("==================================================")
           PY
 
       # ------------------------------------------------------------
-      # 11. SHOW FINAL FILE TREE
+      # 12. FINAL ACCESSIBILITY FILE TREE
       # ------------------------------------------------------------
       - name: Show Accessibility File Tree
         shell: bash
         run: |
+          set -e
+
           echo "=================================================="
           echo "ACCESSIBILITY TREE"
           echo "=================================================="
@@ -346,11 +482,13 @@ jobs:
             | sort
 
       # ------------------------------------------------------------
-      # 12. SHOW FINAL BUILD CONFIGURATION
+      # 13. SHOW FINAL BUILD CONFIGURATION
       # ------------------------------------------------------------
       - name: Show Final Build Configuration
         shell: bash
         run: |
+          set -e
+
           echo "=================================================="
           echo "FINAL BUILDOZER SPEC"
           echo "=================================================="
@@ -358,7 +496,7 @@ jobs:
           cat buildozer.spec
 
       # ------------------------------------------------------------
-      # 13. CHECK GIT CHANGES
+      # 14. CHECK GIT CHANGES
       # ------------------------------------------------------------
       - name: Check Git Changes
         shell: bash
@@ -370,42 +508,55 @@ jobs:
           git status --short
 
       # ------------------------------------------------------------
-      # 14. COMMIT ONLY BUILD CONFIGURATION CHANGES
+      # 15. COMMIT BUILD CONFIGURATION
       # ------------------------------------------------------------
       - name: Commit Build Configuration
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -e
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add buildozer.spec
 
           if git diff --cached --quiet; then
             echo "No build configuration changes to commit."
           else
-            git commit -m "Build 59: configure Accessibility resources"
+            git commit \
+              -m "Build 59: configure Accessibility resources"
           fi
 
       # ------------------------------------------------------------
-      # 15. PUSH CONFIGURATION
+      # 16. PUSH CONFIGURATION
       # ------------------------------------------------------------
       - name: Push Build Configuration
         shell: bash
         run: |
-          git push origin HEAD:build-59-accessibility
+          set -e
+
+          git push \
+            origin \
+            HEAD:build-59-accessibility
 
       # ------------------------------------------------------------
-      # 16. CLEAN OLD BUILD OUTPUT
+      # 17. CLEAN OLD BUILD OUTPUT
       # ------------------------------------------------------------
       - name: Clean Previous Build
         shell: bash
         run: |
-          rm -rf .buildozer bin
+          set -e
+
+          rm -rf .buildozer
+          rm -rf bin
 
           echo "Previous Buildozer output removed."
 
       # ------------------------------------------------------------
-      # 17. BUILD APK
+      # 18. BUILD APK
       # ------------------------------------------------------------
       - name: Build APK
         shell: bash
@@ -415,7 +566,7 @@ jobs:
           yes | buildozer -v android debug 2>&1 | tee build.log
 
       # ------------------------------------------------------------
-      # 18. EXTRACT IMPORTANT ERRORS
+      # 19. EXTRACT IMPORTANT ERRORS
       # ------------------------------------------------------------
       - name: Extract Build Errors
         if: failure()
@@ -431,23 +582,32 @@ jobs:
             grep -n -E \
               "FAILURE:|ERROR:|AAPT:|Manifest merger failed|Execution failed|Caused by:|Could not find|No matching distribution|resource .* not found|error:" \
               build.log \
-              | tail -n 100 \
+              | tail -n 150 \
               || true
 
           else
+
             echo "build.log was not created."
+
           fi
 
       # ------------------------------------------------------------
-      # 19. VERIFY GENERATED APK
+      # 20. LIST APK
       # ------------------------------------------------------------
       - name: List APK
         if: success()
         shell: bash
         run: |
+          set -e
+
           echo "=================================================="
           echo "GENERATED APK FILES"
           echo "=================================================="
+
+          if [ ! -d bin ]; then
+            echo "ERROR: bin directory was not created."
+            exit 1
+          fi
 
           find bin \
             -maxdepth 1 \
@@ -457,7 +617,7 @@ jobs:
             -exec ls -lh {} \;
 
       # ------------------------------------------------------------
-      # 20. UPLOAD APK
+      # 21. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
         if: success()
@@ -469,7 +629,7 @@ jobs:
           retention-days: 14
 
       # ------------------------------------------------------------
-      # 21. UPLOAD BUILD LOG ON FAILURE
+      # 22. UPLOAD BUILD LOG
       # ------------------------------------------------------------
       - name: Upload Build Log
         if: always()

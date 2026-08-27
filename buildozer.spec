@@ -1,4 +1,5 @@
 [app]
+android.add_resources = android_src/res
 title = JULIE AI OS
 package.name = julieaios
 package.domain = org.julie.ai
@@ -9,7 +10,7 @@ source.exclude_dirs = .buildozer,bin,__pycache__,.git,apk
 
 version = 6.6.1
 
-requirements = python3,kivy
+requirements = python3,kivy,pyjnius,android
 
 orientation = portrait
 fullscreen = 0

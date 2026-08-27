@@ -20,7 +20,7 @@ android.ndk_api = 21
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 
-android.permissions = INTERNET, RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, BIND_ACCESSIBILITY_SERVICE
+android.permissions = INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,BIND_ACCESSIBILITY_SERVICE
 
 android.add_src = android_src
 android.res_xml = android_src/res/xml/julie_accessibility_service.xml

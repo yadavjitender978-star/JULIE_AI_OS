@@ -626,11 +626,6 @@ jobs:
       # ------------------------------------------------------------
       # 20. MARKETPLACE AI REVIEWER PREPARATION
       # ------------------------------------------------------------
-      # IMPORTANT:
-      # This layer does NOT send build logs to OpenAI/Gemini.
-      # It prepares a clean diagnostic package for a Marketplace
-      # reviewer/action or manual AI analysis.
-      # ------------------------------------------------------------
       - name: Prepare AI Error Review Package
         if: failure()
         shell: bash
@@ -691,7 +686,100 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ------------------------------------------------------------
-      # 21. UPLOAD BUILD LOG + AI REVIEW PACKAGE
+      # 21. VERIFY ACTION-READY AI REVIEW INPUT
+      # ------------------------------------------------------------
+      - name: Prepare Action-Ready AI Review Input
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+
+          echo "=================================================="
+          echo "JULIE AI OS ACTION-READY AI REVIEW INPUT"
+          echo "=================================================="
+
+          REVIEW_INPUT="action_ready_ai_review.md"
+
+          {
+            echo "# JULIE AI OS - Action-Ready Build Error Review"
+            echo ""
+            echo "## Purpose"
+            echo ""
+            echo "This file contains the build diagnostics prepared for manual AI analysis."
+            echo "No external AI API is called by this workflow."
+            echo ""
+            echo "## Build Context"
+            echo ""
+            echo "- Workflow: ${GITHUB_WORKFLOW}"
+            echo "- Run: ${GITHUB_RUN_NUMBER}"
+            echo "- Branch: ${GITHUB_REF_NAME}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo ""
+            echo "## AI Analysis Instructions"
+            echo ""
+            echo "Analyze the JULIE AI OS build failure."
+            echo ""
+            echo "1. Identify the true root cause."
+            echo "2. Separate root cause from secondary errors."
+            echo "3. Identify the exact file and line responsible."
+            echo "4. Explain why the build failed."
+            echo "5. Provide the exact production-safe fix."
+            echo "6. Do not remove existing JULIE AI OS functionality."
+            echo "7. Preserve the Accessibility integration."
+            echo "8. Provide complete replacement code when a file must be edited."
+            echo ""
+            echo "## Diagnostic Data"
+            echo ""
+            echo '```text'
+
+            if [ -f filtered_build_errors.txt ]; then
+              cat filtered_build_errors.txt
+            elif [ -f ai_error_review.txt ]; then
+              cat ai_error_review.txt
+            elif [ -f build.log ]; then
+              tail -n 200 build.log
+            else
+              echo "No diagnostic file was available."
+            fi
+
+            echo '```'
+            echo ""
+            echo "## Privacy"
+            echo ""
+            echo "No OpenAI API call was performed."
+            echo "No Gemini API call was performed."
+            echo "No external AI service was contacted."
+            echo ""
+            echo "## End of Review Input"
+          } > "$REVIEW_INPUT"
+
+          echo ""
+          echo "Action-ready review input created:"
+          echo "$REVIEW_INPUT"
+
+          if [ ! -s "$REVIEW_INPUT" ]; then
+            echo "::error title=Action-Ready Review Failed::Review input file is empty"
+            exit 1
+          fi
+
+          echo ""
+          echo "Action-ready review input verification PASSED."
+
+          {
+            echo ""
+            echo "## 🧠 Action-Ready AI Review Input"
+            echo ""
+            echo "Verification passed."
+            echo ""
+            echo "**File:** \`$REVIEW_INPUT\`"
+            echo ""
+            echo "**API status:** No external AI API was called."
+            echo ""
+            echo "This package is ready for the next Marketplace integration stage."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ------------------------------------------------------------
+      # 22. UPLOAD BUILD LOG + AI REVIEW PACKAGES
       # ------------------------------------------------------------
       - name: Upload Build Diagnostics
         if: always()
@@ -702,12 +790,13 @@ jobs:
             build.log
             filtered_build_errors.txt
             ai_error_review.txt
+            action_ready_ai_review.md
             buildozer.spec
           if-no-files-found: ignore
           retention-days: 14
 
       # ------------------------------------------------------------
-      # 22. LIST APK
+      # 23. LIST APK
       # ------------------------------------------------------------
       - name: List APK
         if: success()
@@ -732,7 +821,7 @@ jobs:
             -exec ls -lh {} \;
 
       # ------------------------------------------------------------
-      # 23. UPLOAD APK
+      # 24. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
         if: success()

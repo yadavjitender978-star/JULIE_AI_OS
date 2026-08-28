@@ -80,7 +80,6 @@ jobs:
             virtualenv
 
           python -m pip install buildozer
-
           python -m pip install "cython==0.29.36"
 
           echo "Buildozer:"
@@ -117,16 +116,13 @@ jobs:
           )
 
           for FILE in "${REQUIRED_FILES[@]}"; do
-
             if [ ! -f "$FILE" ]; then
               echo ""
-              echo "ERROR: Required file is missing:"
-              echo "$FILE"
+              echo "::error title=Missing Accessibility File::$FILE"
               exit 1
             fi
 
             echo "OK: $FILE"
-
           done
 
           echo ""
@@ -179,11 +175,6 @@ jobs:
       # ------------------------------------------------------------
       # 7. VALIDATE ACCESSIBILITY RESOURCE XML
       # ------------------------------------------------------------
-      # IMPORTANT:
-      # Do NOT parse accessibility_service_manifest.xml as a
-      # standalone XML document. It is an application-manifest
-      # fragment and is injected into AndroidManifest.xml.
-      # ------------------------------------------------------------
       - name: Validate Accessibility Resource XML
         shell: bash
         run: |
@@ -200,9 +191,7 @@ jobs:
 
           for path in resource_files:
               print(f"Checking Android resource XML: {path}")
-
               ET.parse(path)
-
               print(f"OK: {path}")
 
           print("")
@@ -210,12 +199,7 @@ jobs:
           PY
 
       # ------------------------------------------------------------
-      # 8. VALIDATE MANIFEST FRAGMENT
-      # ------------------------------------------------------------
-      # The manifest fragment contains android:* attributes.
-      # Because it is intentionally a fragment, we validate it by
-      # wrapping it inside a temporary <application> element that
-      # declares the Android namespace.
+      # 8. VALIDATE ACCESSIBILITY MANIFEST FRAGMENT
       # ------------------------------------------------------------
       - name: Validate Accessibility Manifest Fragment
         shell: bash
@@ -354,13 +338,9 @@ jobs:
           import re
 
           path = Path("buildozer.spec")
-
-          text = path.read_text(
-              encoding="utf-8"
-          )
+          text = path.read_text(encoding="utf-8")
 
           def set_option(text, key, value):
-
               pattern = (
                   rf"(?m)^[ \t]*{re.escape(key)}[ \t]*=.*$"
               )
@@ -368,7 +348,6 @@ jobs:
               replacement = f"{key} = {value}"
 
               if re.search(pattern, text):
-
                   return re.sub(
                       pattern,
                       replacement,
@@ -394,58 +373,36 @@ jobs:
                   + text[insert_at:]
               )
 
-          # --------------------------------------------------------
-          # Python / Kivy / Android modules
-          # --------------------------------------------------------
           text = set_option(
               text,
               "requirements",
               "python3,kivy,pyjnius,android"
           )
 
-          # --------------------------------------------------------
-          # Accessibility permission
-          # --------------------------------------------------------
           text = set_option(
               text,
               "android.permissions",
               "INTERNET,RECORD_AUDIO,MODIFY_AUDIO_SETTINGS,BIND_ACCESSIBILITY_SERVICE"
           )
 
-          # --------------------------------------------------------
-          # Java source
-          # --------------------------------------------------------
           text = set_option(
               text,
               "android.add_src",
               "android_src"
           )
 
-          # --------------------------------------------------------
-          # Accessibility service configuration XML
-          # --------------------------------------------------------
           text = set_option(
               text,
               "android.res_xml",
               "android_src/res/xml/julie_accessibility_service.xml"
           )
 
-          # --------------------------------------------------------
-          # IMPORTANT:
-          # Add the complete Android resource tree.
-          #
-          # This makes sure strings.xml is available to Android
-          # resource linking as well as the accessibility XML.
-          # --------------------------------------------------------
           text = set_option(
               text,
               "android.add_resources",
               "android_src/res"
           )
 
-          # --------------------------------------------------------
-          # Accessibility <service> declaration
-          # --------------------------------------------------------
           text = set_option(
               text,
               "android.extra_manifest_application_xml",
@@ -465,7 +422,7 @@ jobs:
           PY
 
       # ------------------------------------------------------------
-      # 12. FINAL ACCESSIBILITY FILE TREE
+      # 12. SHOW ACCESSIBILITY FILE TREE
       # ------------------------------------------------------------
       - name: Show Accessibility File Tree
         shell: bash
@@ -566,33 +523,138 @@ jobs:
           yes | buildozer -v android debug 2>&1 | tee build.log
 
       # ------------------------------------------------------------
-      # 19. EXTRACT IMPORTANT ERRORS
+      # 19. EXTRACT AND ANNOTATE BUILD ERRORS
       # ------------------------------------------------------------
-      - name: Extract Build Errors
+      - name: Extract and Annotate Build Errors
         if: failure()
         shell: bash
         run: |
-          echo ""
+          set +e
+
           echo "=================================================="
-          echo "IMPORTANT BUILD ERRORS"
+          echo "JULIE AI OS BUILD DIAGNOSTIC"
           echo "=================================================="
 
-          if [ -f build.log ]; then
+          LOG_FILE="build.log"
 
-            grep -n -E \
-              "FAILURE:|ERROR:|AAPT:|Manifest merger failed|Execution failed|Caused by:|Could not find|No matching distribution|resource .* not found|error:" \
-              build.log \
-              | tail -n 150 \
-              || true
-
-          else
-
-            echo "build.log was not created."
-
+          if [ ! -f "$LOG_FILE" ]; then
+            echo "::error title=JULIE Build Failed::build.log was not created"
+            {
+              echo "## 🚨 JULIE AI OS Build Error"
+              echo ""
+              echo "build.log was not created."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
 
+          echo ""
+          echo "Scanning build log..."
+
+          # ----------------------------------------------------------
+          # Extract important error lines.
+          # ----------------------------------------------------------
+          MATCHED_ERRORS=$(
+            grep -n -E \
+              "FAILURE:|AAPT:|Manifest merger failed|Execution failed for task|Caused by:|Could not find|No matching distribution found|resource .* not found|error:" \
+              "$LOG_FILE" \
+              | tail -n 80
+          )
+
+          # ----------------------------------------------------------
+          # Fallback if no known pattern matched.
+          # ----------------------------------------------------------
+          if [ -z "$MATCHED_ERRORS" ]; then
+            MATCHED_ERRORS=$(
+              tail -n 120 "$LOG_FILE"
+            )
+          fi
+
+          echo ""
+          echo "=================================================="
+          echo "IMPORTANT ERRORS"
+          echo "=================================================="
+          echo "$MATCHED_ERRORS"
+
+          # ----------------------------------------------------------
+          # Find the first high-value error.
+          # ----------------------------------------------------------
+          ROOT_ERROR=$(
+            echo "$MATCHED_ERRORS" \
+              | grep -E \
+                "AAPT:|Manifest merger failed|Execution failed for task|No matching distribution found|Could not find|Caused by:|resource .* not found|error:" \
+              | head -n 1
+          )
+
+          if [ -z "$ROOT_ERROR" ]; then
+            ROOT_ERROR="Build failed. See diagnostic output below."
+          fi
+
+          # ----------------------------------------------------------
+          # GitHub red error annotation.
+          # ----------------------------------------------------------
+          SAFE_ROOT_ERROR=$(
+            echo "$ROOT_ERROR" \
+              | sed \
+                's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g'
+          )
+
+          echo "::error title=JULIE AI OS Build Failed::$SAFE_ROOT_ERROR"
+
+          # ----------------------------------------------------------
+          # GitHub Actions Summary.
+          # ----------------------------------------------------------
+          {
+            echo "## 🚨 JULIE AI OS Build Failed"
+            echo ""
+            echo "**Root error:**"
+            echo ""
+            echo '```text'
+            echo "$ROOT_ERROR"
+            echo '```'
+            echo ""
+            echo "**Relevant build diagnostics:**"
+            echo ""
+            echo '```text'
+            echo "$MATCHED_ERRORS"
+            echo '```'
+            echo ""
+            echo "Copy the relevant error block above into ChatGPT or Gemini for manual analysis."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # ----------------------------------------------------------
+          # Save a small filtered diagnostic file.
+          # ----------------------------------------------------------
+          {
+            echo "JULIE AI OS BUILD DIAGNOSTIC"
+            echo "============================"
+            echo ""
+            echo "ROOT ERROR:"
+            echo "$ROOT_ERROR"
+            echo ""
+            echo "RELEVANT ERRORS:"
+            echo "$MATCHED_ERRORS"
+          } > filtered_build_errors.txt
+
+          echo ""
+          echo "Diagnostic extraction completed."
+
       # ------------------------------------------------------------
-      # 20. LIST APK
+      # 20. UPLOAD FULL BUILD LOG
+      # ------------------------------------------------------------
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JULIE_AI_OS_Build59_BuildLog
+          path: |
+            build.log
+            filtered_build_errors.txt
+            buildozer.spec
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ------------------------------------------------------------
+      # 21. LIST APK
       # ------------------------------------------------------------
       - name: List APK
         if: success()
@@ -617,7 +679,7 @@ jobs:
             -exec ls -lh {} \;
 
       # ------------------------------------------------------------
-      # 21. UPLOAD APK
+      # 22. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
         if: success()
@@ -626,18 +688,4 @@ jobs:
           name: JULIE_AI_OS_Build59_Accessibility
           path: bin/*.apk
           if-no-files-found: error
-          retention-days: 14
-
-      # ------------------------------------------------------------
-      # 22. UPLOAD BUILD LOG
-      # ------------------------------------------------------------
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: JULIE_AI_OS_Build59_BuildLog
-          path: |
-            build.log
-            buildozer.spec
-          if-no-files-found: ignore
           retention-days: 14

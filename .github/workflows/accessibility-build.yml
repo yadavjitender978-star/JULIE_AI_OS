@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   build-accessibility:
@@ -539,20 +540,19 @@ jobs:
 
           if [ ! -f "$LOG_FILE" ]; then
             echo "::error title=JULIE Build Failed::build.log was not created"
+
             {
               echo "## 🚨 JULIE AI OS Build Error"
               echo ""
               echo "build.log was not created."
             } >> "$GITHUB_STEP_SUMMARY"
+
             exit 0
           fi
 
           echo ""
           echo "Scanning build log..."
 
-          # ----------------------------------------------------------
-          # Extract important error lines.
-          # ----------------------------------------------------------
           MATCHED_ERRORS=$(
             grep -n -E \
               "FAILURE:|AAPT:|Manifest merger failed|Execution failed for task|Caused by:|Could not find|No matching distribution found|resource .* not found|error:" \
@@ -560,9 +560,6 @@ jobs:
               | tail -n 80
           )
 
-          # ----------------------------------------------------------
-          # Fallback if no known pattern matched.
-          # ----------------------------------------------------------
           if [ -z "$MATCHED_ERRORS" ]; then
             MATCHED_ERRORS=$(
               tail -n 120 "$LOG_FILE"
@@ -575,9 +572,6 @@ jobs:
           echo "=================================================="
           echo "$MATCHED_ERRORS"
 
-          # ----------------------------------------------------------
-          # Find the first high-value error.
-          # ----------------------------------------------------------
           ROOT_ERROR=$(
             echo "$MATCHED_ERRORS" \
               | grep -E \
@@ -589,9 +583,6 @@ jobs:
             ROOT_ERROR="Build failed. See diagnostic output below."
           fi
 
-          # ----------------------------------------------------------
-          # GitHub red error annotation.
-          # ----------------------------------------------------------
           SAFE_ROOT_ERROR=$(
             echo "$ROOT_ERROR" \
               | sed \
@@ -600,9 +591,6 @@ jobs:
 
           echo "::error title=JULIE AI OS Build Failed::$SAFE_ROOT_ERROR"
 
-          # ----------------------------------------------------------
-          # GitHub Actions Summary.
-          # ----------------------------------------------------------
           {
             echo "## 🚨 JULIE AI OS Build Failed"
             echo ""
@@ -621,9 +609,6 @@ jobs:
             echo "Copy the relevant error block above into ChatGPT or Gemini for manual analysis."
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # ----------------------------------------------------------
-          # Save a small filtered diagnostic file.
-          # ----------------------------------------------------------
           {
             echo "JULIE AI OS BUILD DIAGNOSTIC"
             echo "============================"
@@ -639,22 +624,90 @@ jobs:
           echo "Diagnostic extraction completed."
 
       # ------------------------------------------------------------
-      # 20. UPLOAD FULL BUILD LOG
+      # 20. MARKETPLACE AI REVIEWER PREPARATION
       # ------------------------------------------------------------
-      - name: Upload Build Log
+      # IMPORTANT:
+      # This layer does NOT send build logs to OpenAI/Gemini.
+      # It prepares a clean diagnostic package for a Marketplace
+      # reviewer/action or manual AI analysis.
+      # ------------------------------------------------------------
+      - name: Prepare AI Error Review Package
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+
+          echo "=================================================="
+          echo "JULIE AI REVIEW PACKAGE"
+          echo "=================================================="
+
+          REVIEW_FILE="ai_error_review.txt"
+
+          {
+            echo "JULIE AI OS - BUILD ERROR REVIEW"
+            echo "================================="
+            echo ""
+            echo "Workflow: $GITHUB_WORKFLOW"
+            echo "Run: $GITHUB_RUN_NUMBER"
+            echo "Branch: $GITHUB_REF_NAME"
+            echo "Commit: $GITHUB_SHA"
+            echo ""
+            echo "This diagnostic was generated locally inside GitHub Actions."
+            echo "No OpenAI API or Gemini API request is performed by this step."
+            echo ""
+            echo "ROOT / IMPORTANT BUILD ERRORS"
+            echo "------------------------------"
+
+            if [ -f filtered_build_errors.txt ]; then
+              cat filtered_build_errors.txt
+            elif [ -f build.log ]; then
+              tail -n 150 build.log
+            else
+              echo "No build diagnostic file was available."
+            fi
+
+            echo ""
+            echo "END OF REVIEW PACKAGE"
+
+          } > "$REVIEW_FILE"
+
+          echo "AI review package created: $REVIEW_FILE"
+
+          {
+            echo ""
+            echo "## 🤖 AI Error Review Package"
+            echo ""
+            echo "A clean diagnostic package has been prepared for manual review."
+            echo ""
+            echo '```text'
+            if [ -f "$REVIEW_FILE" ]; then
+              cat "$REVIEW_FILE"
+            fi
+            echo '```'
+            echo ""
+            echo "**Privacy:** No OpenAI/Gemini API call is performed by this step."
+            echo ""
+            echo "You can manually copy this diagnostic to ChatGPT or Gemini."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ------------------------------------------------------------
+      # 21. UPLOAD BUILD LOG + AI REVIEW PACKAGE
+      # ------------------------------------------------------------
+      - name: Upload Build Diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: JULIE_AI_OS_Build59_BuildLog
+          name: JULIE_AI_OS_Build59_Diagnostics
           path: |
             build.log
             filtered_build_errors.txt
+            ai_error_review.txt
             buildozer.spec
           if-no-files-found: ignore
           retention-days: 14
 
       # ------------------------------------------------------------
-      # 21. LIST APK
+      # 22. LIST APK
       # ------------------------------------------------------------
       - name: List APK
         if: success()
@@ -679,7 +732,7 @@ jobs:
             -exec ls -lh {} \;
 
       # ------------------------------------------------------------
-      # 22. UPLOAD APK
+      # 23. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
         if: success()

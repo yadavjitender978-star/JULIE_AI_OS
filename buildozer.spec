@@ -10,7 +10,7 @@ source.exclude_dirs = .buildozer,bin,__pycache__,.git,apk
 
 version = 6.6.1
 
-requirements = python3,kivy==2.3.1,pyjnius,android
+requirements = python3,kivy
 
 orientation = portrait
 fullscreen = 0

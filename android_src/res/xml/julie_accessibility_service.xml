@@ -20,6 +20,6 @@
 
     android:canPerformGestures="true"
 
-    android:description="JULIE AI OS Accessibility Service for screen understanding and user interface interaction."
+    android:description="@string/julie_accessibility_description"
 
 />

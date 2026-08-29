@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       # ------------------------------------------------------------
-      # 2. PYTHON
+      # 2. SETUP PYTHON
       # ------------------------------------------------------------
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -32,7 +32,7 @@ jobs:
           python-version: "3.11"
 
       # ------------------------------------------------------------
-      # 3. JAVA
+      # 3. SETUP JAVA 17
       # ------------------------------------------------------------
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -67,7 +67,7 @@ jobs:
             build-essential
 
       # ------------------------------------------------------------
-      # 5. BUILD TOOLS
+      # 5. INSTALL BUILDOZER
       # ------------------------------------------------------------
       - name: Install Buildozer
         shell: bash
@@ -83,12 +83,18 @@ jobs:
           python -m pip install buildozer
           python -m pip install "cython==0.29.36"
 
+          echo "=================================================="
+          echo "BUILD TOOLS"
+          echo "=================================================="
+
           echo "Buildozer:"
           buildozer --version
 
+          echo ""
           echo "Python:"
           python --version
 
+          echo ""
           echo "Java:"
           java -version
 
@@ -501,7 +507,62 @@ jobs:
             HEAD:build-59-accessibility
 
       # ------------------------------------------------------------
-      # 17. CLEAN OLD BUILD OUTPUT
+      # 17. CREATE JULIE PROBLEM MATCHER
+      # ------------------------------------------------------------
+      - name: Create JULIE Problem Matcher
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p .github/problem-matchers
+
+          cat > .github/problem-matchers/julie-build.json <<'JSON'
+          {
+            "problemMatcher": [
+              {
+                "owner": "julie-build",
+                "severity": "error",
+                "pattern": [
+                  {
+                    "regexp": "^.*?([^\\s]+\\.(?:py|java|xml|kt|gradle|spec)):(\\d+):(?:\\s*\\d+:)?\\s*(?:AAPT:\\s*)?(?:error:|ERROR:)?\\s*(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                  }
+                ]
+              }
+            ]
+          }
+          JSON
+
+          echo "=================================================="
+          echo "JULIE PROBLEM MATCHER"
+          echo "=================================================="
+
+          cat .github/problem-matchers/julie-build.json
+
+          echo ""
+          echo "Problem Matcher definition created."
+
+      # ------------------------------------------------------------
+      # 18. ACTIVATE JULIE PROBLEM MATCHER
+      # ------------------------------------------------------------
+      - name: Activate JULIE Problem Matcher
+        shell: bash
+        run: |
+          set -e
+
+          echo "::add-matcher::.github/problem-matchers/julie-build.json"
+
+          echo "=================================================="
+          echo "JULIE PROBLEM MATCHER ACTIVE"
+          echo "=================================================="
+
+          echo "JULIE Problem Matcher is now active."
+          echo "Matching build errors will be annotated by GitHub."
+
+      # ------------------------------------------------------------
+      # 19. CLEAN OLD BUILD OUTPUT
       # ------------------------------------------------------------
       - name: Clean Previous Build
         shell: bash
@@ -514,7 +575,7 @@ jobs:
           echo "Previous Buildozer output removed."
 
       # ------------------------------------------------------------
-      # 18. BUILD APK
+      # 20. BUILD APK
       # ------------------------------------------------------------
       - name: Build APK
         shell: bash
@@ -524,7 +585,20 @@ jobs:
           yes | buildozer -v android debug 2>&1 | tee build.log
 
       # ------------------------------------------------------------
-      # 19. EXTRACT AND ANNOTATE BUILD ERRORS
+      # 21. REMOVE JULIE PROBLEM MATCHER
+      # ------------------------------------------------------------
+      - name: Remove JULIE Problem Matcher
+        if: always()
+        shell: bash
+        run: |
+          set +e
+
+          echo "::remove-matcher owner=julie-build::"
+
+          echo "JULIE Problem Matcher removed after build."
+
+      # ------------------------------------------------------------
+      # 22. EXTRACT AND ANNOTATE BUILD ERRORS
       # ------------------------------------------------------------
       - name: Extract and Annotate Build Errors
         if: failure()
@@ -545,6 +619,8 @@ jobs:
               echo "## 🚨 JULIE AI OS Build Error"
               echo ""
               echo "build.log was not created."
+              echo ""
+              echo "The build failed before the build log could be captured."
             } >> "$GITHUB_STEP_SUMMARY"
 
             exit 0
@@ -555,14 +631,14 @@ jobs:
 
           MATCHED_ERRORS=$(
             grep -n -E \
-              "FAILURE:|AAPT:|Manifest merger failed|Execution failed for task|Caused by:|Could not find|No matching distribution found|resource .* not found|error:" \
+              "FAILURE:|AAPT:|Manifest merger failed|Execution failed for task|Caused by:|Could not find|No matching distribution found|resource .* not found|error:|ERROR:" \
               "$LOG_FILE" \
-              | tail -n 80
+              | tail -n 100
           )
 
           if [ -z "$MATCHED_ERRORS" ]; then
             MATCHED_ERRORS=$(
-              tail -n 120 "$LOG_FILE"
+              tail -n 150 "$LOG_FILE"
             )
           fi
 
@@ -570,12 +646,13 @@ jobs:
           echo "=================================================="
           echo "IMPORTANT ERRORS"
           echo "=================================================="
+
           echo "$MATCHED_ERRORS"
 
           ROOT_ERROR=$(
             echo "$MATCHED_ERRORS" \
               | grep -E \
-                "AAPT:|Manifest merger failed|Execution failed for task|No matching distribution found|Could not find|Caused by:|resource .* not found|error:" \
+                "AAPT:|Manifest merger failed|Execution failed for task|No matching distribution found|Could not find|Caused by:|resource .* not found|error:|ERROR:" \
               | head -n 1
           )
 
@@ -606,7 +683,12 @@ jobs:
             echo "$MATCHED_ERRORS"
             echo '```'
             echo ""
-            echo "Copy the relevant error block above into ChatGPT or Gemini for manual analysis."
+            echo "**Privacy:**"
+            echo ""
+            echo "These diagnostics were generated locally inside GitHub Actions."
+            echo "No external AI API was called."
+            echo "No OpenAI API was called."
+            echo "No Gemini API was called."
           } >> "$GITHUB_STEP_SUMMARY"
 
           {
@@ -624,16 +706,16 @@ jobs:
           echo "Diagnostic extraction completed."
 
       # ------------------------------------------------------------
-      # 20. MARKETPLACE AI REVIEWER PREPARATION
+      # 23. PREPARE MANUAL AI REVIEW PACKAGE
       # ------------------------------------------------------------
-      - name: Prepare AI Error Review Package
+      - name: Prepare Manual AI Review Package
         if: failure()
         shell: bash
         run: |
           set +e
 
           echo "=================================================="
-          echo "JULIE AI REVIEW PACKAGE"
+          echo "JULIE MANUAL AI REVIEW PACKAGE"
           echo "=================================================="
 
           REVIEW_FILE="ai_error_review.txt"
@@ -648,7 +730,12 @@ jobs:
             echo "Commit: $GITHUB_SHA"
             echo ""
             echo "This diagnostic was generated locally inside GitHub Actions."
-            echo "No OpenAI API or Gemini API request is performed by this step."
+            echo ""
+            echo "IMPORTANT PRIVACY INFORMATION"
+            echo "------------------------------"
+            echo "No OpenAI API request was performed."
+            echo "No Gemini API request was performed."
+            echo "No external AI service was contacted."
             echo ""
             echo "ROOT / IMPORTANT BUILD ERRORS"
             echo "------------------------------"
@@ -666,27 +753,33 @@ jobs:
 
           } > "$REVIEW_FILE"
 
-          echo "AI review package created: $REVIEW_FILE"
+          echo "Manual AI review package created: $REVIEW_FILE"
 
           {
             echo ""
-            echo "## 🤖 AI Error Review Package"
+            echo "## 🤖 Manual AI Review Package"
             echo ""
-            echo "A clean diagnostic package has been prepared for manual review."
+            echo "A diagnostic package has been prepared for manual copy/paste."
             echo ""
             echo '```text'
+
             if [ -f "$REVIEW_FILE" ]; then
               cat "$REVIEW_FILE"
             fi
+
             echo '```'
             echo ""
-            echo "**Privacy:** No OpenAI/Gemini API call is performed by this step."
+            echo "**Privacy:**"
             echo ""
-            echo "You can manually copy this diagnostic to ChatGPT or Gemini."
+            echo "No OpenAI API call was performed."
+            echo "No Gemini API call was performed."
+            echo "No external AI service was contacted."
+            echo ""
+            echo "The diagnostic can be manually copied to ChatGPT or Gemini."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ------------------------------------------------------------
-      # 21. VERIFY ACTION-READY AI REVIEW INPUT
+      # 24. PREPARE ACTION-READY AI REVIEW INPUT
       # ------------------------------------------------------------
       - name: Prepare Action-Ready AI Review Input
         if: failure()
@@ -706,7 +799,7 @@ jobs:
             echo "## Purpose"
             echo ""
             echo "This file contains the build diagnostics prepared for manual AI analysis."
-            echo "No external AI API is called by this workflow."
+            echo "It does not send anything to an AI service."
             echo ""
             echo "## Build Context"
             echo ""
@@ -720,13 +813,15 @@ jobs:
             echo "Analyze the JULIE AI OS build failure."
             echo ""
             echo "1. Identify the true root cause."
-            echo "2. Separate root cause from secondary errors."
-            echo "3. Identify the exact file and line responsible."
+            echo "2. Separate the root cause from secondary errors."
+            echo "3. Identify the exact file and line responsible when available."
             echo "4. Explain why the build failed."
             echo "5. Provide the exact production-safe fix."
             echo "6. Do not remove existing JULIE AI OS functionality."
             echo "7. Preserve the Accessibility integration."
-            echo "8. Provide complete replacement code when a file must be edited."
+            echo "8. Check whether the error is related to Python, Java, XML, Gradle, Android, Buildozer, manifest configuration, resources, or dependencies."
+            echo "9. Provide complete replacement code when a file must be edited."
+            echo "10. Do not suggest sending the diagnostic to an external API from this workflow."
             echo ""
             echo "## Diagnostic Data"
             echo ""
@@ -749,6 +844,8 @@ jobs:
             echo "No OpenAI API call was performed."
             echo "No Gemini API call was performed."
             echo "No external AI service was contacted."
+            echo ""
+            echo "This file is intended for manual copy/paste only."
             echo ""
             echo "## End of Review Input"
           } > "$REVIEW_INPUT"
@@ -773,13 +870,54 @@ jobs:
             echo ""
             echo "**File:** \`$REVIEW_INPUT\`"
             echo ""
-            echo "**API status:** No external AI API was called."
+            echo "**API status:**"
             echo ""
-            echo "This package is ready for the next Marketplace integration stage."
+            echo "No external AI API was called."
+            echo ""
+            echo "The diagnostic is ready for manual copy/paste."
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ------------------------------------------------------------
-      # 22. UPLOAD BUILD LOG + AI REVIEW PACKAGES
+      # 25. SHOW FINAL DIAGNOSTIC SUMMARY
+      # ------------------------------------------------------------
+      - name: Show Final Diagnostic Summary
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+
+          echo "=================================================="
+          echo "JULIE FINAL BUILD DIAGNOSTIC"
+          echo "=================================================="
+
+          if [ -f filtered_build_errors.txt ]; then
+            echo ""
+            echo "FILTERED BUILD ERRORS"
+            echo "---------------------"
+            cat filtered_build_errors.txt
+          fi
+
+          if [ -f ai_error_review.txt ]; then
+            echo ""
+            echo "MANUAL AI REVIEW PACKAGE"
+            echo "------------------------"
+            cat ai_error_review.txt
+          fi
+
+          if [ -f action_ready_ai_review.md ]; then
+            echo ""
+            echo "ACTION-READY MANUAL REVIEW INPUT"
+            echo "--------------------------------"
+            cat action_ready_ai_review.md
+          fi
+
+          echo ""
+          echo "=================================================="
+          echo "END JULIE FINAL BUILD DIAGNOSTIC"
+          echo "=================================================="
+
+      # ------------------------------------------------------------
+      # 26. UPLOAD BUILD LOG + DIAGNOSTIC PACKAGES
       # ------------------------------------------------------------
       - name: Upload Build Diagnostics
         if: always()
@@ -792,11 +930,12 @@ jobs:
             ai_error_review.txt
             action_ready_ai_review.md
             buildozer.spec
+            .github/problem-matchers/julie-build.json
           if-no-files-found: ignore
           retention-days: 14
 
       # ------------------------------------------------------------
-      # 23. LIST APK
+      # 27. LIST APK
       # ------------------------------------------------------------
       - name: List APK
         if: success()
@@ -813,6 +952,22 @@ jobs:
             exit 1
           fi
 
+          APK_COUNT=$(
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              | wc -l
+          )
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "::error title=APK Missing::No APK file was generated."
+            exit 1
+          fi
+
+          echo "APK count: $APK_COUNT"
+          echo ""
+
           find bin \
             -maxdepth 1 \
             -type f \
@@ -821,7 +976,7 @@ jobs:
             -exec ls -lh {} \;
 
       # ------------------------------------------------------------
-      # 24. UPLOAD APK
+      # 28. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
         if: success()

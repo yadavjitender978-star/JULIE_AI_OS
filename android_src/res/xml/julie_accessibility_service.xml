@@ -20,6 +20,9 @@
 
     android:canPerformGestures="true"
 
-    android:description="@string/julie_accessibility_description"
-
+    android:accessibilityFlags="
+        flagDefault|
+        flagRetrieveInteractiveWindows|
+        flagReportViewIds
+    "
 />

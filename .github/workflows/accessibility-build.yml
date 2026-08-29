@@ -6,6 +6,7 @@ on:
 permissions:
   contents: write
   actions: read
+  issues: write
 
 jobs:
 
@@ -850,7 +851,939 @@ jobs:
 
 
       # ============================================================
-      # 25. UPLOAD BUILD DIAGNOSTICS
+      # 25. JULIE ERROR MEMORY INITIALIZATION
+      # ============================================================
+
+      - name: Initialize JULIE Error Memory
+        if: always()
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f ERROR_HISTORY.json ]; then
+            cat > ERROR_HISTORY.json <<'JSON'
+          {
+            "schema_version": 1,
+            "project": "JULIE AI OS",
+            "errors": []
+          }
+          JSON
+          fi
+
+          if [ ! -f ERROR_HISTORY.md ]; then
+            cat > ERROR_HISTORY.md <<'EOF'
+          # JULIE AI OS — Error History
+
+          Permanent build-error history.
+
+          No historical error record is deleted automatically.
+
+          ## Status Legend
+
+          - 🔴 OPEN
+          - 🟢 RESOLVED
+          - 🟡 RECURRED
+
+          EOF
+          fi
+
+          echo "JULIE Error Memory initialized."
+
+
+      # ============================================================
+      # 26. RECORD FAILURE + DUPLICATE DETECTION + GITHUB ISSUE
+      # ============================================================
+
+      - name: Record Error Memory and Create GitHub Issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -e
+
+          echo "=================================================="
+          echo "JULIE ERROR MEMORY ENGINE"
+          echo "=================================================="
+
+          if [ ! -f filtered_build_errors.txt ]; then
+            echo "filtered_build_errors.txt is missing."
+            echo "Cannot create persistent error record."
+            exit 0
+          fi
+
+          python - <<'PY'
+          import hashlib
+          import json
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          diagnostic_path = Path("filtered_build_errors.txt")
+          review_path = Path("ai_error_review.txt")
+          action_path = Path("action_ready_ai_review.md")
+          history_path = Path("ERROR_HISTORY.json")
+
+          diagnostic = diagnostic_path.read_text(
+              encoding="utf-8",
+              errors="replace"
+          )
+
+          root_match = re.search(
+              r"FINAL FAILURE CANDIDATE:\s*\n(.*?)(?:\n\n|$)",
+              diagnostic,
+              re.DOTALL
+          )
+
+          root_error = (
+              root_match.group(1).strip()
+              if root_match
+              else "Build failed. See complete diagnostic."
+          )
+
+          total_match = re.search(
+              r"TOTAL LOG LINES:\s*\n(\d+)",
+              diagnostic
+          )
+
+          total_lines = (
+              int(total_match.group(1))
+              if total_match
+              else 0
+          )
+
+          normalized = root_error.lower()
+
+          normalized = re.sub(
+              r"/home/runner/work/[^/\s]+/[^/\s]+/",
+              "<workspace>/",
+              normalized
+          )
+
+          normalized = re.sub(
+              r"/opt/hostedtoolcache/[^/\s]+",
+              "<toolcache>",
+              normalized
+          )
+
+          normalized = re.sub(
+              r"line \d+",
+              "line <n>",
+              normalized
+          )
+
+          normalized = re.sub(
+              r":\d+(?=[:\s])",
+              ":<n>",
+              normalized
+          )
+
+          normalized = re.sub(
+              r"\b\d+\b",
+              "<n>",
+              normalized
+          )
+
+          normalized = re.sub(
+              r"\s+",
+              " ",
+              normalized
+          ).strip()
+
+          signature = hashlib.sha256(
+              normalized.encode("utf-8")
+          ).hexdigest()
+
+          now = datetime.now(timezone.utc).isoformat()
+
+          history = json.loads(
+              history_path.read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          errors = history.setdefault("errors", [])
+
+          matching = [
+              item for item in errors
+              if item.get("signature") == signature
+          ]
+
+          occurrence_number = len(matching) + 1
+
+          record = {
+              "error_id": f"Error {len(errors) + 1}",
+              "occurrence": occurrence_number,
+              "timestamp_utc": now,
+              "workflow": "${{ github.workflow }}",
+              "run_number": "${{ github.run_number }}",
+              "run_id": "${{ github.run_id }}",
+              "branch": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "status": "OPEN",
+              "root_error": root_error,
+              "normalized_error": normalized,
+              "signature": signature,
+              "total_log_lines": total_lines,
+              "diagnostic_file": "filtered_build_errors.txt",
+              "full_log_file": "build.log",
+              "manual_review_file": "ai_error_review.txt",
+              "action_ready_review_file": "action_ready_ai_review.md",
+              "previous_matches": [
+                  {
+                      "error_id": item.get("error_id"),
+                      "issue_number": item.get("issue_number"),
+                      "status": item.get("status"),
+                      "commit": item.get("commit")
+                  }
+                  for item in matching
+              ],
+              "issue_number": None,
+              "resolved_by": None,
+              "resolution": None
+          }
+
+          errors.append(record)
+
+          history["last_updated_utc"] = now
+          history["total_errors"] = len(errors)
+
+          history_path.write_text(
+              json.dumps(
+                  history,
+                  indent=2,
+                  ensure_ascii=False
+              ) + "\n",
+              encoding="utf-8"
+          )
+
+          Path("julie_current_error.env").write_text(
+              "\n".join([
+                  f"JULIE_ERROR_ID={record['error_id']}",
+                  f"JULIE_ERROR_OCCURRENCE={occurrence_number}",
+                  f"JULIE_ERROR_SIGNATURE={signature}",
+                  f"JULIE_ROOT_ERROR={root_error.replace(chr(10), ' ')}"
+              ]) + "\n",
+              encoding="utf-8"
+          )
+
+          print("")
+          print("JULIE ERROR ID:", record["error_id"])
+          print("OCCURRENCE:", occurrence_number)
+          print("SIGNATURE:", signature)
+          print("ROOT ERROR:", root_error)
+          print("PREVIOUS MATCHES:", len(matching))
+          PY
+
+          source julie_current_error.env
+
+          EXISTING_ISSUE=""
+
+          if [ -s ERROR_HISTORY.json ]; then
+            EXISTING_ISSUE=$(
+              python - <<'PY'
+          import json
+
+          with open("ERROR_HISTORY.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          signature = __import__("os").environ.get(
+              "JULIE_ERROR_SIGNATURE",
+              ""
+          )
+
+          matches = [
+              item for item in data.get("errors", [])
+              if item.get("signature") == signature
+              and item.get("issue_number")
+          ]
+
+          if matches:
+              print(matches[-1]["issue_number"])
+          PY
+            )
+          fi
+
+          TITLE="JULIE ${JULIE_ERROR_ID}: Build failure"
+
+          if [ -n "$EXISTING_ISSUE" ]; then
+            TITLE="JULIE ${JULIE_ERROR_ID}: Recurring build error"
+          fi
+
+          BODY_FILE="julie_issue_body.md"
+
+          {
+            echo "# JULIE AI OS Build Error"
+            echo ""
+            echo "**Error ID:** ${JULIE_ERROR_ID}"
+            echo ""
+            echo "**Occurrence:** ${JULIE_ERROR_OCCURRENCE}"
+            echo ""
+            echo "**Workflow:** ${GITHUB_WORKFLOW}"
+            echo ""
+            echo "**Run:** ${GITHUB_RUN_NUMBER}"
+            echo ""
+            echo "**Branch:** ${GITHUB_REF_NAME}"
+            echo ""
+            echo "**Commit:** ${GITHUB_SHA}"
+            echo ""
+            echo "**Status:** 🔴 OPEN"
+            echo ""
+            echo "## Root Error"
+            echo ""
+            echo '```text'
+            echo "${JULIE_ROOT_ERROR}"
+            echo '```'
+            echo ""
+            echo "## Error Signature"
+            echo ""
+            echo "\`${JULIE_ERROR_SIGNATURE}\`"
+            echo ""
+            echo "## Persistent Diagnostic Files"
+            echo ""
+            echo "- \`build.log\` — complete Build APK output"
+            echo "- \`filtered_build_errors.txt\` — extracted build failures"
+            echo "- \`ai_error_review.txt\` — manual review package"
+            echo "- \`action_ready_ai_review.md\` — action-ready diagnostic"
+            echo ""
+            echo "## Historical Memory"
+            echo ""
+
+            if [ -n "$EXISTING_ISSUE" ]; then
+              echo "⚠️ **THIS ERROR HAS OCCURRED BEFORE.**"
+              echo ""
+              echo "Previous GitHub Issue: #${EXISTING_ISSUE}"
+              echo ""
+              echo "This occurrence is preserved as a separate historical record."
+              echo "The previous issue is not deleted or overwritten."
+            else
+              echo "This is the first recorded occurrence of this error signature."
+            fi
+
+            echo ""
+            echo "## Resolution"
+            echo ""
+            echo "No solution has been recorded yet."
+            echo ""
+            echo "A later successful rebuild may record the resolving build, commit and changed files."
+            echo ""
+            echo "## Diagnostics"
+            echo ""
+            echo '```text'
+
+            if [ -f filtered_build_errors.txt ]; then
+              cat filtered_build_errors.txt
+            fi
+
+            echo '```'
+
+          } > "$BODY_FILE"
+
+          ISSUE_NUMBER=$(
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" \
+              --body-file "$BODY_FILE" \
+              --label "julie-error" \
+              2>/dev/null \
+              | sed -E 's#.*/issues/##'
+          )
+
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "WARNING: GitHub Issue could not be created."
+            echo "Error memory will still be preserved locally."
+          else
+
+            echo "Created GitHub Issue #${ISSUE_NUMBER}"
+
+            python - <<PY
+          import json
+
+          path = "ERROR_HISTORY.json"
+
+          with open(path, "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          for item in reversed(data.get("errors", [])):
+              if item.get("error_id") == "${JULIE_ERROR_ID}":
+                  item["issue_number"] = int("${ISSUE_NUMBER}")
+                  break
+
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(
+                  data,
+                  f,
+                  indent=2,
+                  ensure_ascii=False
+              )
+              f.write("\n")
+          PY
+
+          fi
+
+
+      # ============================================================
+      # 27. UPDATE HUMAN-READABLE ERROR HISTORY
+      # ============================================================
+
+      - name: Generate JULIE Error History Markdown
+        if: always()
+        shell: bash
+        run: |
+          set -e
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          history = json.loads(
+              Path("ERROR_HISTORY.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          errors = history.get("errors", [])
+
+          lines = []
+
+          lines.append("# JULIE AI OS — Error History")
+          lines.append("")
+          lines.append(
+              "Permanent build-error memory. "
+              "Historical records are never automatically deleted."
+          )
+          lines.append("")
+          lines.append(
+              f"Total recorded occurrences: **{len(errors)}**"
+          )
+          lines.append("")
+          lines.append("---")
+          lines.append("")
+
+          if not errors:
+              lines.append("No build errors recorded yet.")
+          else:
+              for item in reversed(errors):
+
+                  status = item.get("status", "OPEN")
+
+                  if status == "RESOLVED":
+                      icon = "🟢"
+                  elif item.get("occurrence", 1) > 1:
+                      icon = "🟡"
+                  else:
+                      icon = "🔴"
+
+                  lines.append(
+                      f"## {icon} {item.get('error_id', 'Unknown Error')}"
+                  )
+                  lines.append("")
+
+                  lines.append(
+                      f"- **Occurrence:** "
+                      f"{item.get('occurrence', 1)}"
+                  )
+                  lines.append(
+                      f"- **Status:** {status}"
+                  )
+                  lines.append(
+                      f"- **Time:** "
+                      f"{item.get('timestamp_utc', 'Unknown')}"
+                  )
+                  lines.append(
+                      f"- **Build Run:** "
+                      f"{item.get('run_number', 'Unknown')}"
+                  )
+                  lines.append(
+                      f"- **Branch:** "
+                      f"{item.get('branch', 'Unknown')}"
+                  )
+                  lines.append(
+                      f"- **Commit:** "
+                      f"`{item.get('commit', 'Unknown')}`"
+                  )
+                  lines.append(
+                      f"- **Issue:** "
+                      f"#{item.get('issue_number', 'not created')}"
+                  )
+                  lines.append("")
+
+                  lines.append("### Root Error")
+                  lines.append("")
+                  lines.append("```text")
+                  lines.append(
+                      item.get(
+                          "root_error",
+                          "Unknown build error"
+                      )
+                  )
+                  lines.append("```")
+                  lines.append("")
+
+                  previous = item.get(
+                      "previous_matches",
+                      []
+                  )
+
+                  if previous:
+                      lines.append(
+                          "### ⚠️ Previous Occurrences"
+                      )
+                      lines.append("")
+
+                      for match in previous:
+                          lines.append(
+                              "- "
+                              f"{match.get('error_id')} "
+                              f"→ Issue "
+                              f"#{match.get('issue_number', 'unknown')} "
+                              f"→ "
+                              f"{match.get('status', 'unknown')}"
+                          )
+
+                      lines.append("")
+
+                  resolution = item.get("resolution")
+
+                  if resolution:
+                      lines.append("### Resolution")
+                      lines.append("")
+                      lines.append(
+                          resolution
+                      )
+                      lines.append("")
+
+                  resolved_by = item.get("resolved_by")
+
+                  if resolved_by:
+                      lines.append("### Resolved By")
+                      lines.append("")
+                      lines.append(
+                          f"- {resolved_by}"
+                      )
+                      lines.append("")
+
+                  lines.append("---")
+                  lines.append("")
+
+          Path("ERROR_HISTORY.md").write_text(
+              "\n".join(lines),
+              encoding="utf-8"
+          )
+
+          print("ERROR_HISTORY.md generated.")
+          PY
+
+
+      # ============================================================
+      # 28. AUTO-RESOLUTION MEMORY AFTER SUCCESSFUL BUILD
+      # ============================================================
+
+      - name: Resolve Latest Pending JULIE Error
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -e
+
+          echo "=================================================="
+          echo "JULIE SUCCESS / RESOLUTION MEMORY"
+          echo "=================================================="
+
+          if [ ! -f ERROR_HISTORY.json ]; then
+            echo "No error history exists."
+            exit 0
+          fi
+
+          PENDING_DATA=$(
+            python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("ERROR_HISTORY.json")
+
+          data = json.loads(
+              path.read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          errors = data.get("errors", [])
+
+          pending = [
+              item
+              for item in errors
+              if item.get("status") == "OPEN"
+              and item.get("issue_number")
+          ]
+
+          if not pending:
+              print("")
+              raise SystemExit(0)
+
+          item = pending[-1]
+
+          print(item.get("error_id", ""))
+          print(item.get("issue_number", ""))
+          print(item.get("commit", ""))
+          PY
+          )
+
+          if [ -z "$PENDING_DATA" ]; then
+            echo "No pending error available for automatic resolution."
+            exit 0
+          fi
+
+          PENDING_ERROR_ID=$(echo "$PENDING_DATA" | sed -n '1p')
+          PENDING_ISSUE=$(echo "$PENDING_DATA" | sed -n '2p')
+          FAILED_COMMIT=$(echo "$PENDING_DATA" | sed -n '3p')
+
+          echo "Pending Error: ${PENDING_ERROR_ID}"
+          echo "Issue: #${PENDING_ISSUE}"
+          echo "Failed Commit: ${FAILED_COMMIT}"
+
+          CHANGED_FILES="No changed files detected."
+
+          if git cat-file -e "${FAILED_COMMIT}^{commit}" 2>/dev/null; then
+
+            FILE_LIST=$(
+              git diff \
+                --name-only \
+                "${FAILED_COMMIT}..HEAD" \
+                2>/dev/null \
+                | head -n 100
+            )
+
+            if [ -n "$FILE_LIST" ]; then
+              CHANGED_FILES="$FILE_LIST"
+            fi
+
+          fi
+
+          RESOLUTION_BODY="julie_resolution_comment.md"
+
+          {
+            echo "## 🟢 JULIE Build Resolution"
+            echo ""
+            echo "The build completed successfully after this recorded error."
+            echo ""
+            echo "**Previous Error:** ${PENDING_ERROR_ID}"
+            echo ""
+            echo "**Previous Issue:** #${PENDING_ISSUE}"
+            echo ""
+            echo "**Successful Build Run:** ${GITHUB_RUN_NUMBER}"
+            echo ""
+            echo "**Successful Commit:** ${GITHUB_SHA}"
+            echo ""
+            echo "**Resolution evidence:**"
+            echo ""
+            echo "The APK build completed successfully."
+            echo ""
+            echo "### Changed Files Since Failed Commit"
+            echo ""
+            echo '```text'
+            echo "$CHANGED_FILES"
+            echo '```'
+            echo ""
+            echo "This resolution record is historical evidence."
+            echo "The original error record remains preserved."
+            echo ""
+            echo "The original issue is being marked RESOLVED because a subsequent APK build succeeded."
+          } > "$RESOLUTION_BODY"
+
+          gh issue comment \
+            "$PENDING_ISSUE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body-file "$RESOLUTION_BODY"
+
+          gh issue close \
+            "$PENDING_ISSUE" \
+            --repo "$GITHUB_REPOSITORY" \
+            --comment "JULIE automatic resolution: successful APK build verified in Run #${GITHUB_RUN_NUMBER}."
+
+          python - <<PY
+          import json
+          from pathlib import Path
+
+          path = Path("ERROR_HISTORY.json")
+
+          data = json.loads(
+              path.read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          for item in reversed(data.get("errors", [])):
+              if item.get("error_id") == "${PENDING_ERROR_ID}":
+
+                  item["status"] = "RESOLVED"
+
+                  item["resolved_by"] = (
+                      "Successful APK build "
+                      f"Run #${GITHUB_RUN_NUMBER}, "
+                      f"commit ${GITHUB_SHA}"
+                  )
+
+                  item["resolution"] = (
+                      "Successful APK build verified. "
+                      "Resolution evidence recorded in GitHub Issue "
+                      f"#{${PENDING_ISSUE}}."
+                  )
+
+                  break
+
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(
+                  data,
+                  f,
+                  indent=2,
+                  ensure_ascii=False
+              )
+              f.write("\n")
+          PY
+
+          echo "Error ${PENDING_ERROR_ID} marked RESOLVED."
+
+
+      # ============================================================
+      # 29. REGENERATE HISTORY AFTER RESOLUTION
+      # ============================================================
+
+      - name: Refresh JULIE Error History
+        if: always()
+        shell: bash
+        run: |
+          set -e
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          history = json.loads(
+              Path("ERROR_HISTORY.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+
+          errors = history.get("errors", [])
+
+          lines = [
+              "# JULIE AI OS — Error History",
+              "",
+              "Permanent build-error memory.",
+              "",
+              "**Historical records are never automatically deleted.**",
+              "",
+              f"Total recorded occurrences: **{len(errors)}**",
+              "",
+              "---",
+              ""
+          ]
+
+          for item in reversed(errors):
+
+              status = item.get("status", "OPEN")
+
+              if status == "RESOLVED":
+                  icon = "🟢"
+              elif item.get("occurrence", 1) > 1:
+                  icon = "🟡"
+              else:
+                  icon = "🔴"
+
+              lines.append(
+                  f"## {icon} {item.get('error_id', 'Unknown Error')}"
+              )
+              lines.append("")
+
+              lines.append(
+                  f"**Occurrence:** {item.get('occurrence', 1)}"
+              )
+              lines.append(
+                  f"  \n**Status:** {status}"
+              )
+              lines.append(
+                  f"  \n**Time:** {item.get('timestamp_utc', 'Unknown')}"
+              )
+              lines.append(
+                  f"  \n**Build:** Run #{item.get('run_number', 'Unknown')}"
+              )
+              lines.append(
+                  f"  \n**Branch:** {item.get('branch', 'Unknown')}"
+              )
+              lines.append(
+                  f"  \n**Commit:** `{item.get('commit', 'Unknown')}`"
+              )
+              lines.append(
+                  f"  \n**GitHub Issue:** #{item.get('issue_number', 'not created')}"
+              )
+              lines.append("")
+
+              lines.append("### Root Error")
+              lines.append("")
+              lines.append("```text")
+              lines.append(
+                  item.get(
+                      "root_error",
+                      "Unknown build error"
+                  )
+              )
+              lines.append("```")
+              lines.append("")
+
+              previous = item.get(
+                  "previous_matches",
+                  []
+              )
+
+              if previous:
+                  lines.append(
+                      "### ⚠️ This Error Was Seen Before"
+                  )
+                  lines.append("")
+
+                  for match in previous:
+                      lines.append(
+                          f"- {match.get('error_id')} "
+                          f"→ Issue #{match.get('issue_number', 'unknown')} "
+                          f"→ {match.get('status', 'unknown')}"
+                      )
+
+                  lines.append("")
+
+              resolution = item.get("resolution")
+
+              if resolution:
+                  lines.append("### Resolution")
+                  lines.append("")
+                  lines.append(resolution)
+                  lines.append("")
+
+              resolved_by = item.get("resolved_by")
+
+              if resolved_by:
+                  lines.append("### Resolved By")
+                  lines.append("")
+                  lines.append(resolved_by)
+                  lines.append("")
+
+              lines.append("---")
+              lines.append("")
+
+          Path("ERROR_HISTORY.md").write_text(
+              "\n".join(lines),
+              encoding="utf-8"
+          )
+
+          print("JULIE Error History refreshed.")
+          PY
+
+
+      # ============================================================
+      # 30. COMMIT JULIE ERROR MEMORY
+      # ============================================================
+
+      - name: Commit JULIE Error Memory
+        if: always()
+        shell: bash
+        run: |
+          set +e
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            ERROR_HISTORY.json \
+            ERROR_HISTORY.md
+
+          if git diff --cached --quiet; then
+
+            echo "No JULIE Error Memory changes."
+
+          else
+
+            git commit \
+              -m "JULIE: update permanent error history"
+
+            git push \
+              origin \
+              HEAD:build-59-accessibility
+
+          fi
+
+
+      # ============================================================
+      # 31. SHOW ERROR MEMORY SUMMARY
+      # ============================================================
+
+      - name: Show JULIE Error Memory Summary
+        if: always()
+        shell: bash
+        run: |
+          set +e
+
+          echo ""
+          echo "=================================================="
+          echo "JULIE PERMANENT ERROR MEMORY"
+          echo "=================================================="
+
+          if [ -f ERROR_HISTORY.json ]; then
+
+            python - <<'PY'
+          import json
+
+          with open(
+              "ERROR_HISTORY.json",
+              "r",
+              encoding="utf-8"
+          ) as f:
+              data = json.load(f)
+
+          errors = data.get("errors", [])
+
+          print("")
+          print("TOTAL ERROR OCCURRENCES:", len(errors))
+
+          open_count = sum(
+              1
+              for item in errors
+              if item.get("status") == "OPEN"
+          )
+
+          resolved_count = sum(
+              1
+              for item in errors
+              if item.get("status") == "RESOLVED"
+          )
+
+          print("OPEN:", open_count)
+          print("RESOLVED:", resolved_count)
+
+          print("")
+
+          for item in errors[-10:]:
+              print(
+                  f"{item.get('error_id')} | "
+                  f"Occurrence {item.get('occurrence')} | "
+                  f"{item.get('status')} | "
+                  f"Issue #{item.get('issue_number')}"
+              )
+          PY
+
+          fi
+
+          echo ""
+          echo "=================================================="
+          echo "END JULIE ERROR MEMORY"
+          echo "=================================================="
+
+
+      # ============================================================
+      # 32. UPLOAD BUILD DIAGNOSTICS
       # ============================================================
 
       - name: Upload Build Diagnostics
@@ -865,12 +1798,14 @@ jobs:
             action_ready_ai_review.md
             buildozer.spec
             .github/problem-matchers/julie-build.json
+            ERROR_HISTORY.json
+            ERROR_HISTORY.md
           if-no-files-found: ignore
           retention-days: 14
 
 
       # ============================================================
-      # 26. LIST APK
+      # 33. LIST APK
       # ============================================================
 
       - name: List APK
@@ -919,7 +1854,7 @@ jobs:
 
 
       # ============================================================
-      # 27. UPLOAD APK
+      # 34. UPLOAD APK
       # ============================================================
 
       - name: Upload APK

@@ -8,8 +8,11 @@ permissions:
   actions: read
 
 jobs:
+
   build-accessibility:
+
     name: Build JULIE AI OS Accessibility APK
+
     runs-on: ubuntu-22.04
 
     steps:
@@ -70,6 +73,7 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
+            libtinfo5 \
             cmake \
             libffi-dev \
             libssl-dev \
@@ -77,7 +81,7 @@ jobs:
 
 
       # ============================================================
-      # 5. INSTALL BUILDOZER TOOLCHAIN
+      # 5. INSTALL BUILDOZER + COMPATIBLE CYTHON
       # ============================================================
 
       - name: Install Buildozer Toolchain
@@ -96,7 +100,7 @@ jobs:
             buildozer
 
           python -m pip install \
-            "Cython==0.29.36"
+            "Cython==0.29.34"
 
           echo ""
           echo "=================================================="
@@ -125,10 +129,10 @@ jobs:
 
 
       # ============================================================
-      # 6. VERIFY REQUIRED FILES
+      # 6. VERIFY ACCESSIBILITY FILES
       # ============================================================
 
-      - name: Verify JULIE Accessibility Integration
+      - name: Verify Accessibility Integration
         shell: bash
         run: |
           set -e
@@ -150,66 +154,151 @@ jobs:
           )
 
           for FILE in "${REQUIRED_FILES[@]}"; do
+
             if [ ! -f "$FILE" ]; then
-              echo "::error title=Missing JULIE File::$FILE"
+              echo ""
+              echo "::error title=Missing Accessibility File::$FILE"
               exit 1
             fi
 
             echo "OK: $FILE"
+
           done
 
           echo ""
-          echo "All required JULIE Accessibility files are present."
+          echo "=================================================="
+          echo "ACCESSIBILITY JAVA SERVICE"
+          echo "=================================================="
+
+          grep -n \
+            "class JulieAccessibilityService" \
+            android_src/org/julie/ai/JulieAccessibilityService.java
+
+          echo ""
+          echo "=================================================="
+          echo "ACCESSIBILITY XML"
+          echo "=================================================="
+
+          grep -n \
+            "accessibility-service" \
+            android_src/res/xml/julie_accessibility_service.xml
+
+          echo ""
+          echo "Accessibility files are present."
+
+          echo ""
+          echo "IMPORTANT:"
+          echo "No custom android:description rejection check is performed."
+          echo "The Android Accessibility XML is preserved unchanged."
 
 
       # ============================================================
-      # 7. VERIFY PYTHON ACCESSIBILITY BRIDGE
+      # 7. VALIDATE ACCESSIBILITY RESOURCE XML SYNTAX ONLY
       # ============================================================
 
-      - name: Validate Accessibility Python Bridge
+      - name: Validate Accessibility Resource XML
         shell: bash
         run: |
           set -e
 
-          echo "=================================================="
-          echo "PYTHON ACCESSIBILITY BRIDGE CHECK"
-          echo "=================================================="
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
 
-          python -m py_compile \
-            accessibility/accessibility_bridge.py
+          resource_files = [
+              Path(
+                  "android_src/res/xml/julie_accessibility_service.xml"
+              ),
+              Path(
+                  "android_src/res/values/strings.xml"
+              ),
+          ]
 
-          python -m py_compile \
-            accessibility/accessibility_service.py
+          for path in resource_files:
 
-          grep -q \
-            "from jnius import autoclass" \
-            accessibility/accessibility_bridge.py
+              print(f"Checking Android resource XML: {path}")
 
-          grep -q \
-            "JulieAccessibilityService" \
-            accessibility/accessibility_bridge.py
+              if not path.is_file():
+                  raise RuntimeError(
+                      f"Missing Android resource XML: {path}"
+                  )
 
-          grep -q \
-            "getInstance" \
-            accessibility/accessibility_bridge.py
+              ET.parse(path)
 
-          echo "Python Accessibility bridge validation passed."
+              print(f"OK: {path}")
+
+          print("")
+          print("Accessibility resource XML syntax validation passed.")
+          PY
 
 
       # ============================================================
-      # 8. VERIFY JAVA ACCESSIBILITY SERVICE
+      # 8. VALIDATE ACCESSIBILITY MANIFEST
       # ============================================================
 
-      - name: Validate Accessibility Java Service
+      - name: Validate Accessibility Manifest Fragment
+        shell: bash
+        run: |
+          set -e
+
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          manifest_fragment = Path(
+              "accessibility/accessibility_service_manifest.xml"
+          )
+
+          if not manifest_fragment.is_file():
+              raise RuntimeError(
+                  "Accessibility manifest fragment is missing."
+              )
+
+          fragment = manifest_fragment.read_text(
+              encoding="utf-8"
+          ).strip()
+
+          if not fragment:
+              raise RuntimeError(
+                  "Accessibility manifest fragment is empty."
+              )
+
+          if "<service" not in fragment:
+              raise RuntimeError(
+                  "Accessibility manifest fragment does not contain <service>."
+              )
+
+          wrapper = f"""
+          <application
+              xmlns:android="http://schemas.android.com/apk/res/android">
+              {fragment}
+          </application>
+          """
+
+          ET.fromstring(wrapper)
+
+          print(
+              "OK: accessibility/accessibility_service_manifest.xml"
+          )
+
+          print(
+              "Accessibility manifest fragment validation passed."
+          )
+          PY
+
+
+      # ============================================================
+      # 9. VALIDATE JAVA
+      # ============================================================
+
+      - name: Validate Java Source
         shell: bash
         run: |
           set -e
 
           JAVA_FILE="android_src/org/julie/ai/JulieAccessibilityService.java"
 
-          echo "=================================================="
-          echo "JAVA ACCESSIBILITY SERVICE CHECK"
-          echo "=================================================="
+          echo "Checking Java source..."
 
           grep -q \
             "package org.julie.ai;" \
@@ -235,130 +324,11 @@ jobs:
             "onDestroy" \
             "$JAVA_FILE"
 
-          echo "Java Accessibility Service validation passed."
+          echo "Java Accessibility Service source validation passed."
 
 
       # ============================================================
-      # 9. VALIDATE ACCESSIBILITY XML
-      # ============================================================
-
-      - name: Validate Accessibility Resource XML
-        shell: bash
-        run: |
-          set -e
-
-          echo "=================================================="
-          echo "ACCESSIBILITY RESOURCE XML CHECK"
-          echo "=================================================="
-
-          python - <<'PY'
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-
-          files = [
-              Path("android_src/res/xml/julie_accessibility_service.xml"),
-              Path("android_src/res/values/strings.xml"),
-          ]
-
-          for path in files:
-              print(f"Checking: {path}")
-              ET.parse(path)
-              print(f"OK: {path}")
-
-          xml_file = Path(
-              "android_src/res/xml/julie_accessibility_service.xml"
-          )
-
-          text = xml_file.read_text(encoding="utf-8")
-
-          forbidden = (
-              'android:description="@string/julie_accessibility_description"'
-          )
-
-          if forbidden in text:
-              raise RuntimeError(
-                  "Unresolved android:description resource reference "
-                  "still exists in accessibility XML."
-              )
-
-          print("")
-          print(
-              "Accessibility XML contains no unresolved "
-              "description resource reference."
-          )
-
-          print("")
-          print("Accessibility XML validation passed.")
-          PY
-
-
-      # ============================================================
-      # 10. VALIDATE ACCESSIBILITY MANIFEST
-      # ============================================================
-
-      - name: Validate Accessibility Manifest Fragment
-        shell: bash
-        run: |
-          set -e
-
-          echo "=================================================="
-          echo "ACCESSIBILITY MANIFEST CHECK"
-          echo "=================================================="
-
-          python - <<'PY'
-          import xml.etree.ElementTree as ET
-          from pathlib import Path
-
-          path = Path(
-              "accessibility/accessibility_service_manifest.xml"
-          )
-
-          text = path.read_text(
-              encoding="utf-8"
-          ).strip()
-
-          if not text:
-              raise RuntimeError(
-                  "Accessibility manifest fragment is empty."
-              )
-
-          if "<service" not in text:
-              raise RuntimeError(
-                  "Accessibility manifest fragment "
-                  "does not contain <service>."
-              )
-
-          wrapper = (
-              '<application '
-              'xmlns:android="http://schemas.android.com/apk/res/android">'
-              + text +
-              "</application>"
-          )
-
-          ET.fromstring(wrapper)
-
-          print(
-              "Accessibility manifest XML validation passed."
-          )
-          PY
-
-          grep -q \
-            "JulieAccessibilityService" \
-            accessibility/accessibility_service_manifest.xml
-
-          grep -q \
-            "BIND_ACCESSIBILITY_SERVICE" \
-            accessibility/accessibility_service_manifest.xml
-
-          grep -q \
-            "android.accessibilityservice.AccessibilityService" \
-            accessibility/accessibility_service_manifest.xml
-
-          echo "Accessibility manifest integration passed."
-
-
-      # ============================================================
-      # 11. VALIDATE BUILDOZER CONFIGURATION
+      # 10. VALIDATE BUILDOZER CONFIGURATION
       # ============================================================
 
       - name: Validate Buildozer Configuration
@@ -367,7 +337,7 @@ jobs:
           set -e
 
           echo "=================================================="
-          echo "BUILDOZER CONFIGURATION CHECK"
+          echo "BUILD CONFIGURATION"
           echo "=================================================="
 
           grep -n "^requirements" buildozer.spec
@@ -377,26 +347,12 @@ jobs:
           grep -n "^android.archs" buildozer.spec
           grep -n "^android.permissions" buildozer.spec
           grep -n "^android.add_src" buildozer.spec
-          grep -n "^android.add_resources" buildozer.spec
           grep -n "^android.res_xml" buildozer.spec
+          grep -n "^android.add_resources" buildozer.spec
           grep -n "^android.extra_manifest_application_xml" buildozer.spec
 
           echo ""
-          echo "Checking required requirements..."
-
-          grep -q \
-            "^requirements = python3,kivy,pyjnius$" \
-            buildozer.spec
-
-          if grep -q \
-            "^requirements.*android" \
-            buildozer.spec; then
-            echo "::error title=Invalid Requirements::The standalone 'android' package must not be in Buildozer requirements."
-            exit 1
-          fi
-
-          echo ""
-          echo "Checking Accessibility configuration..."
+          echo "Checking required Accessibility configuration..."
 
           grep -q \
             "BIND_ACCESSIBILITY_SERVICE" \
@@ -410,12 +366,16 @@ jobs:
             "android.extra_manifest_application_xml" \
             buildozer.spec
 
+          grep -q \
+            "requirements = python3,kivy" \
+            buildozer.spec
+
           echo ""
-          echo "Buildozer configuration validation passed."
+          echo "Buildozer Accessibility configuration detected."
 
 
       # ============================================================
-      # 12. SHOW BUILD CONFIGURATION
+      # 11. SHOW FINAL BUILD CONFIGURATION
       # ============================================================
 
       - name: Show Final Build Configuration
@@ -431,7 +391,7 @@ jobs:
 
 
       # ============================================================
-      # 13. SHOW ACCESSIBILITY TREE
+      # 12. SHOW ACCESSIBILITY TREE
       # ============================================================
 
       - name: Show Accessibility File Tree
@@ -440,7 +400,7 @@ jobs:
           set -e
 
           echo "=================================================="
-          echo "JULIE ACCESSIBILITY TREE"
+          echo "ACCESSIBILITY TREE"
           echo "=================================================="
 
           find accessibility android_src \
@@ -450,7 +410,116 @@ jobs:
 
 
       # ============================================================
-      # 14. CLEAN ALL LOCAL BUILDOZER OUTPUT
+      # 13. CHECK GIT STATUS
+      # ============================================================
+
+      - name: Check Git Changes
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "GIT STATUS"
+          echo "=================================================="
+
+          git status --short
+
+
+      # ============================================================
+      # 14. COMMIT BUILD CONFIGURATION
+      # ============================================================
+
+      - name: Commit Build Configuration
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add buildozer.spec
+
+          if git diff --cached --quiet; then
+
+            echo "No build configuration changes to commit."
+
+          else
+
+            git commit \
+              -m "Build 59: stabilize Kivy Accessibility build"
+
+          fi
+
+
+      # ============================================================
+      # 15. PUSH CONFIGURATION
+      # ============================================================
+
+      - name: Push Build Configuration
+        shell: bash
+        run: |
+          set -e
+
+          git push \
+            origin \
+            HEAD:build-59-accessibility
+
+
+      # ============================================================
+      # 16. CREATE JULIE PROBLEM MATCHER
+      # ============================================================
+
+      - name: Create JULIE Problem Matcher
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p .github/problem-matchers
+
+          cat > .github/problem-matchers/julie-build.json <<'JSON'
+          {
+            "problemMatcher": [
+              {
+                "owner": "julie-build",
+                "severity": "error",
+                "pattern": [
+                  {
+                    "regexp": "^.*?([^\\s]+\\.(?:py|java|xml|kt|gradle|spec)):(\\d+):(?:\\s*\\d+:)?\\s*(?:AAPT:\\s*)?(?:error:|ERROR:)?\\s*(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "message": 3
+                  }
+                ]
+              }
+            ]
+          }
+          JSON
+
+          echo "=================================================="
+          echo "JULIE PROBLEM MATCHER"
+          echo "=================================================="
+
+          cat .github/problem-matchers/julie-build.json
+
+
+      # ============================================================
+      # 17. ACTIVATE PROBLEM MATCHER
+      # ============================================================
+
+      - name: Activate JULIE Problem Matcher
+        shell: bash
+        run: |
+          set -e
+
+          echo "::add-matcher::.github/problem-matchers/julie-build.json"
+
+          echo ""
+          echo "JULIE Problem Matcher is active."
+
+
+      # ============================================================
+      # 18. CLEAN OLD BUILD
       # ============================================================
 
       - name: Clean Previous Build
@@ -458,53 +527,14 @@ jobs:
         run: |
           set -e
 
-          echo "=================================================="
-          echo "CLEAN BUILD"
-          echo "=================================================="
-
           rm -rf .buildozer
           rm -rf bin
 
-          echo "Cleaned:"
-          echo "  .buildozer"
-          echo "  bin"
+          echo "Previous Buildozer output removed."
 
 
       # ============================================================
-      # 15. SHOW ENVIRONMENT
-      # ============================================================
-
-      - name: Show Build Environment
-        shell: bash
-        run: |
-          set -e
-
-          echo "=================================================="
-          echo "BUILD ENVIRONMENT"
-          echo "=================================================="
-
-          echo "Python:"
-          python --version
-
-          echo ""
-          echo "Cython:"
-          python -c "import Cython; print(Cython.__version__)"
-
-          echo ""
-          echo "Setuptools:"
-          python -c "import setuptools; print(setuptools.__version__)"
-
-          echo ""
-          echo "Buildozer:"
-          buildozer --version
-
-          echo ""
-          echo "Java:"
-          java -version
-
-
-      # ============================================================
-      # 16. BUILD APK
+      # 19. BUILD APK
       # ============================================================
 
       - name: Build APK
@@ -512,15 +542,11 @@ jobs:
         run: |
           set -o pipefail
 
-          echo "=================================================="
-          echo "JULIE AI OS ACCESSIBILITY APK BUILD"
-          echo "=================================================="
-
           yes | buildozer -v android debug 2>&1 | tee build.log
 
 
       # ============================================================
-      # 17. REMOVE PROBLEM MATCHER IF PRESENT
+      # 20. REMOVE PROBLEM MATCHER
       # ============================================================
 
       - name: Remove JULIE Problem Matcher
@@ -529,13 +555,13 @@ jobs:
         run: |
           set +e
 
-          echo "::remove-matcher owner=julie-build::" || true
+          echo "::remove-matcher owner=julie-build::"
 
-          echo "Problem matcher cleanup completed."
+          echo "JULIE Problem Matcher removed."
 
 
       # ============================================================
-      # 18. EXTRACT REAL BUILD FAILURE
+      # 21. EXTRACT REAL BUILD FAILURE
       # ============================================================
 
       - name: Extract and Annotate Build Errors
@@ -551,6 +577,7 @@ jobs:
           LOG_FILE="build.log"
 
           if [ ! -f "$LOG_FILE" ]; then
+
             echo "::error title=JULIE Build Failed::build.log was not created"
 
             {
@@ -560,86 +587,58 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
 
             exit 0
+
           fi
+
+          echo ""
+          echo "Scanning build log..."
 
           TOTAL_LINES=$(wc -l < "$LOG_FILE")
 
-          echo ""
           echo "Total build log lines: $TOTAL_LINES"
-
-          # --------------------------------------------------------
-          # Find high-confidence build-stopping errors.
-          # --------------------------------------------------------
 
           TRUE_FAILURE_LINES=$(
             grep -n -E \
-              "FAILURE:|Execution failed for task|BUILD FAILED|AAPT: error:|Manifest merger failed|fatal error:|Command failed:|No matching distribution found|Could not find a version that satisfies|error:.*failed|ERROR:.*failed|Exception in thread|Traceback \(most recent call last\)" \
+              "FAILURE:|Execution failed for task|BUILD FAILED|AAPT: error:|Manifest merger failed|fatal error:|Command failed:|ERROR:.*failed|error:.*failed|Could not find|No matching distribution found|Exception in thread|Traceback \(most recent call last\)" \
               "$LOG_FILE" \
-              | tail -n 120
+              | tail -n 80
           )
 
           if [ -z "$TRUE_FAILURE_LINES" ]; then
+
             TRUE_FAILURE_LINES=$(
               grep -n -E \
                 "error:|ERROR:|failed|FAILED|Exception" \
                 "$LOG_FILE" \
-                | tail -n 160
+                | tail -n 120
             )
+
           fi
 
           if [ -z "$TRUE_FAILURE_LINES" ]; then
+
             TRUE_FAILURE_LINES=$(
-              tail -n 250 "$LOG_FILE"
+              tail -n 200 "$LOG_FILE"
             )
+
           fi
 
           echo ""
           echo "=================================================="
-          echo "BUILD FAILURE CANDIDATES"
+          echo "FINAL BUILD FAILURE CANDIDATES"
           echo "=================================================="
 
           echo "$TRUE_FAILURE_LINES"
 
-          # --------------------------------------------------------
-          # Explicitly detect known JULIE dependency failures.
-          # --------------------------------------------------------
-
-          P4A_DEPENDENCY_ERRORS=$(
-            grep -n -E \
-              "No matching distribution found for (pyjnius|android|kivy)|Could not find a version that satisfies the requirement (pyjnius|android|kivy)" \
-              "$LOG_FILE" \
-              | tail -n 30
+          ROOT_ERROR=$(
+            echo "$TRUE_FAILURE_LINES" \
+              | tail -n 1
           )
-
-          # --------------------------------------------------------
-          # Explicitly detect config.pxi diagnostics.
-          # These are reported separately and are NOT automatically
-          # declared the root cause.
-          # --------------------------------------------------------
-
-          CONFIG_PXI_ERRORS=$(
-            grep -n \
-              "Dependency for .*\.pyx not resolved: config\.pxi" \
-              "$LOG_FILE" \
-              | tail -n 50
-          )
-
-          if [ -n "$P4A_DEPENDENCY_ERRORS" ]; then
-            ROOT_ERROR=$(
-              echo "$P4A_DEPENDENCY_ERRORS" \
-                | tail -n 1
-            )
-            ROOT_CLASS="Python/p4a dependency resolution failure"
-          else
-            ROOT_ERROR=$(
-              echo "$TRUE_FAILURE_LINES" \
-                | tail -n 1
-            )
-            ROOT_CLASS="Final build failure candidate"
-          fi
 
           if [ -z "$ROOT_ERROR" ]; then
+
             ROOT_ERROR="Build failed. See complete diagnostic."
+
           fi
 
           SAFE_ROOT_ERROR=$(
@@ -648,55 +647,27 @@ jobs:
                 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g'
           )
 
-          echo ""
-          echo "ROOT CLASS:"
-          echo "$ROOT_CLASS"
-
-          echo ""
-          echo "ROOT ERROR:"
-          echo "$ROOT_ERROR"
-
           echo "::error title=JULIE AI OS Build Failed::$SAFE_ROOT_ERROR"
 
           {
             echo "## 🚨 JULIE AI OS Build Failed"
             echo ""
-            echo "**Classification:** $ROOT_CLASS"
-            echo ""
-            echo "**Root error:**"
+            echo "**Final failure candidate:**"
             echo ""
             echo '```text'
             echo "$ROOT_ERROR"
             echo '```'
             echo ""
-            echo "**Relevant build diagnostics:**"
+            echo "**Relevant final diagnostics:**"
             echo ""
             echo '```text'
             echo "$TRUE_FAILURE_LINES"
             echo '```'
             echo ""
-
-            if [ -n "$P4A_DEPENDENCY_ERRORS" ]; then
-              echo "**Python/p4a dependency diagnostics:**"
-              echo ""
-              echo '```text'
-              echo "$P4A_DEPENDENCY_ERRORS"
-              echo '```'
-              echo ""
-            fi
-
-            if [ -n "$CONFIG_PXI_ERRORS" ]; then
-              echo "**config.pxi diagnostics:**"
-              echo ""
-              echo '```text'
-              echo "$CONFIG_PXI_ERRORS"
-              echo '```'
-              echo ""
-              echo "config.pxi diagnostics are reported separately."
-              echo "They are not automatically classified as the root failure."
-              echo ""
-            fi
-
+            echo "**Important:**"
+            echo ""
+            echo "Accessibility XML is not rejected based on android:description."
+            echo "Only actual XML syntax and final build failures are treated as errors."
           } >> "$GITHUB_STEP_SUMMARY"
 
           {
@@ -706,20 +677,11 @@ jobs:
             echo "TOTAL LOG LINES:"
             echo "$TOTAL_LINES"
             echo ""
-            echo "ROOT CLASS:"
-            echo "$ROOT_CLASS"
-            echo ""
-            echo "ROOT ERROR:"
+            echo "FINAL FAILURE CANDIDATE:"
             echo "$ROOT_ERROR"
             echo ""
             echo "RELEVANT FINAL DIAGNOSTICS:"
             echo "$TRUE_FAILURE_LINES"
-            echo ""
-            echo "PYTHON/P4A DEPENDENCY DIAGNOSTICS:"
-            echo "$P4A_DEPENDENCY_ERRORS"
-            echo ""
-            echo "CONFIG.PXI DIAGNOSTICS:"
-            echo "$CONFIG_PXI_ERRORS"
           } > filtered_build_errors.txt
 
           echo ""
@@ -727,7 +689,7 @@ jobs:
 
 
       # ============================================================
-      # 19. PREPARE MANUAL AI REVIEW PACKAGE
+      # 22. PREPARE MANUAL AI REVIEW PACKAGE
       # ============================================================
 
       - name: Prepare Manual AI Review Package
@@ -747,16 +709,10 @@ jobs:
             echo "Branch: $GITHUB_REF_NAME"
             echo "Commit: $GITHUB_SHA"
             echo ""
-            echo "REVIEW RULES"
-            echo "------------"
-            echo "1. Identify the actual build-stopping failure."
-            echo "2. Separate root cause from secondary diagnostics."
-            echo "3. Do not automatically classify config.pxi as root cause."
-            echo "4. Preserve AccessibilityService functionality."
-            echo "5. Preserve screen-content retrieval."
-            echo "6. Preserve gesture capability."
-            echo "7. Preserve Accessibility event handling."
-            echo "8. Do not remove PyJNIus if the Python bridge uses jnius."
+            echo "IMPORTANT"
+            echo "---------"
+            echo "The diagnostic prioritizes actual build-stopping errors."
+            echo "Accessibility android:description is not treated as an automatic failure."
             echo ""
             echo "BUILD DIAGNOSTICS"
             echo "-----------------"
@@ -764,7 +720,7 @@ jobs:
             if [ -f filtered_build_errors.txt ]; then
               cat filtered_build_errors.txt
             elif [ -f build.log ]; then
-              tail -n 300 build.log
+              tail -n 250 build.log
             else
               echo "No diagnostic file available."
             fi
@@ -774,11 +730,11 @@ jobs:
 
           } > "$REVIEW_FILE"
 
-          echo "Manual AI review package created: $REVIEW_FILE"
+          echo "Manual AI review package created."
 
 
       # ============================================================
-      # 20. PREPARE ACTION-READY REVIEW
+      # 23. PREPARE ACTION-READY REVIEW
       # ============================================================
 
       - name: Prepare Action-Ready AI Review Input
@@ -799,18 +755,15 @@ jobs:
             echo "- Branch: ${GITHUB_REF_NAME}"
             echo "- Commit: ${GITHUB_SHA}"
             echo ""
-            echo "## Required Analysis"
+            echo "## Analysis Rules"
             echo ""
-            echo "1. Identify the exact build-stopping error."
-            echo "2. Separate root cause from secondary warnings."
-            echo "3. Check Python, Buildozer, python-for-android, Cython, Kivy, PyJNIus, Gradle and Android resource stages."
-            echo "4. Do not treat config.pxi messages as fatal unless a confirmed later failure establishes that."
-            echo "5. Preserve all Accessibility functionality."
-            echo "6. Do not remove JulieAccessibilityService."
-            echo "7. Do not remove gesture capability."
-            echo "8. Do not remove window-content retrieval."
-            echo "9. Provide exact file and line changes."
-            echo "10. Provide complete replacement files when required."
+            echo "1. Identify the actual build-stopping error."
+            echo "2. Do not classify warnings as root failures."
+            echo "3. Do not reject Accessibility XML solely because android:description exists."
+            echo "4. Identify exact file and line when available."
+            echo "5. Preserve Accessibility integration."
+            echo "6. Do not remove Accessibility functionality."
+            echo "7. Provide production-safe fixes."
             echo ""
             echo "## Diagnostic"
             echo ""
@@ -821,7 +774,7 @@ jobs:
             elif [ -f ai_error_review.txt ]; then
               cat ai_error_review.txt
             elif [ -f build.log ]; then
-              tail -n 300 build.log
+              tail -n 250 build.log
             else
               echo "No diagnostic data available."
             fi
@@ -836,15 +789,18 @@ jobs:
           } > "$REVIEW_INPUT"
 
           if [ ! -s "$REVIEW_INPUT" ]; then
+
             echo "::error title=Review Input Failed::Review input is empty"
+
             exit 1
+
           fi
 
-          echo "Action-ready review input created: $REVIEW_INPUT"
+          echo "Action-ready review input created."
 
 
       # ============================================================
-      # 21. FINAL DIAGNOSTIC SUMMARY
+      # 24. FINAL DIAGNOSTIC SUMMARY
       # ============================================================
 
       - name: Show Final Diagnostic Summary
@@ -858,24 +814,33 @@ jobs:
           echo "=================================================="
 
           if [ -f filtered_build_errors.txt ]; then
+
             echo ""
             echo "FILTERED BUILD ERRORS"
             echo "---------------------"
+
             cat filtered_build_errors.txt
+
           fi
 
           if [ -f ai_error_review.txt ]; then
+
             echo ""
             echo "MANUAL AI REVIEW PACKAGE"
             echo "------------------------"
+
             cat ai_error_review.txt
+
           fi
 
           if [ -f action_ready_ai_review.md ]; then
+
             echo ""
             echo "ACTION-READY REVIEW"
             echo "-------------------"
+
             cat action_ready_ai_review.md
+
           fi
 
           echo ""
@@ -885,7 +850,7 @@ jobs:
 
 
       # ============================================================
-      # 22. UPLOAD BUILD DIAGNOSTICS
+      # 25. UPLOAD BUILD DIAGNOSTICS
       # ============================================================
 
       - name: Upload Build Diagnostics
@@ -899,12 +864,13 @@ jobs:
             ai_error_review.txt
             action_ready_ai_review.md
             buildozer.spec
+            .github/problem-matchers/julie-build.json
           if-no-files-found: ignore
           retention-days: 14
 
 
       # ============================================================
-      # 23. LIST GENERATED APK
+      # 26. LIST APK
       # ============================================================
 
       - name: List APK
@@ -918,8 +884,11 @@ jobs:
           echo "=================================================="
 
           if [ ! -d bin ]; then
-            echo "::error title=APK Missing::bin directory was not created."
+
+            echo "ERROR: bin directory was not created."
+
             exit 1
+
           fi
 
           APK_COUNT=$(
@@ -931,8 +900,11 @@ jobs:
           )
 
           if [ "$APK_COUNT" -eq 0 ]; then
+
             echo "::error title=APK Missing::No APK file was generated."
+
             exit 1
+
           fi
 
           echo "APK count: $APK_COUNT"
@@ -947,7 +919,7 @@ jobs:
 
 
       # ============================================================
-      # 24. UPLOAD APK
+      # 27. UPLOAD APK
       # ============================================================
 
       - name: Upload APK

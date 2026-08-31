@@ -24,8 +24,38 @@
       "issue_number": null,
       "resolved_by": null,
       "resolution": null
+    },
+    {
+      "error_id": "Error 2",
+      "occurrence": 2,
+      "timestamp_utc": "2026-08-31T03:00:49.025808+00:00",
+      "workflow": "JULIE AI OS - Build 59 Accessibility",
+      "run_number": "24",
+      "run_id": "33254215302",
+      "branch": "build-59-accessibility",
+      "commit": "a6970c196763734fb71cb4e25d1b392365f8a2eb",
+      "status": "OPEN",
+      "root_error": "30667:\u001b[0m\u001b[1;31m# Command failed: ('/opt/hostedtoolcache/Python/3.11.16/x64/bin/python', '-m', 'pythonforandroid.toolchain', 'apk', '--bootstrap', 'sdl2', '--dist_name', 'julieaios', '--name', 'JULIE AI OS', '--version', '6.6.1', '--package', 'org.julie.ai.julieaios', '--minsdk', '21', '--ndk-api', '21', '--private', '/home/runner/work/JULIE_AI_OS/JULIE_AI_OS/.buildozer/android/app', '--permission', 'INTERNET', '--permission', 'RECORD_AUDIO', '--permission', 'MODIFY_AUDIO_SETTINGS', '--permission', 'BIND_ACCESSIBILITY_SERVICE', '--res_xml', '/home/runner/work/JULIE_AI_OS/JULIE_AI_OS/android_src/res/xml/julie_accessibility_service.xml', '--android-entrypoint', 'org.kivy.android.PythonActivity', '--android-apptheme', '@android:style/Theme.NoTitleBar', '--orientation', 'portrait', '--window', '--enable-androidx', '--copy-libs', '--add-source', '/home/runner/work/JULIE_AI_OS/JULIE_AI_OS/android_src', '--add-resource', '/home/runner/work/JULIE_AI_OS/JULIE_AI_OS/android_src/res:', '--arch', 'arm64-v8a', '--color=always', '--storage-dir=/home/runner/work/JULIE_AI_OS/JULIE_AI_OS/.buildozer/android/platform/build-arm64-v8a', '--ndk-api=21', '--ignore-setup-py', '--debug')\u001b[0m",
+      "normalized_error": "<n>:\u001b[0m\u001b[<n>;31m# command failed: ('<toolcache>/<n>.<n>.<n>/x64/bin/python', '-m', 'pythonforandroid.toolchain', 'apk', '--bootstrap', 'sdl2', '--dist_name', 'julieaios', '--name', 'julie ai os', '--version', '<n>.<n>.<n>', '--package', 'org.julie.ai.julieaios', '--minsdk', '<n>', '--ndk-api', '<n>', '--private', '<workspace>/.buildozer/android/app', '--permission', 'internet', '--permission', 'record_audio', '--permission', 'modify_audio_settings', '--permission', 'bind_accessibility_service', '--res_xml', '<workspace>/android_src/res/xml/julie_accessibility_service.xml', '--android-entrypoint', 'org.kivy.android.pythonactivity', '--android-apptheme', '@android:style/theme.notitlebar', '--orientation', 'portrait', '--window', '--enable-androidx', '--copy-libs', '--add-source', '<workspace>/android_src', '--add-resource', '<workspace>/android_src/res:', '--arch', 'arm64-v8a', '--color=always', '--storage-dir=<workspace>/.buildozer/android/platform/build-arm64-v8a', '--ndk-api=<n>', '--ignore-setup-py', '--debug')\u001b[0m",
+      "signature": "e6789c7440d0c5746f28ebf9508c388d8f6497a1b846a2520e929319d1f8c08d",
+      "total_log_lines": 30800,
+      "diagnostic_file": "filtered_build_errors.txt",
+      "full_log_file": "build.log",
+      "manual_review_file": "ai_error_review.txt",
+      "action_ready_review_file": "action_ready_ai_review.md",
+      "previous_matches": [
+        {
+          "error_id": "Error 1",
+          "issue_number": null,
+          "status": "OPEN",
+          "commit": "a6970c196763734fb71cb4e25d1b392365f8a2eb"
+        }
+      ],
+      "issue_number": null,
+      "resolved_by": null,
+      "resolution": null
     }
   ],
-  "last_updated_utc": "2026-08-29T13:19:06.352277+00:00",
-  "total_errors": 1
+  "last_updated_utc": "2026-08-31T03:00:49.025808+00:00",
+  "total_errors": 2
 }
